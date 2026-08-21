@@ -37,6 +37,7 @@ function buildRoutes() {
   router.use("/dashboard", require("./modules/dashboard/dashboard.routes"));
   router.use("/audit", require("./modules/audit/audit.routes"));
   router.use("/help", require("./modules/help/help.routes"));
+  router.use("/ai", require("./modules/ai/ai.routes"));
 
   // Chefotech's own control plane. Tenant users get a 404 here, not a 403 —
   // the existence of these routes is not something a customer needs to learn.

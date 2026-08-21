@@ -195,6 +195,7 @@ export const SETTINGS_NAVIGATION: NavItem[] = [
   { label: "Document templates", href: "/app/settings/documents", permission: "document.manage_templates" },
   { label: "Notifications", href: "/app/settings/notifications", permission: "notification.manage_templates" },
   { label: "Security", href: "/app/settings/security", permission: "settings.manage_security" },
+  { label: "AI assistant", href: "/app/settings/ai", permission: "settings.manage_ai" },
   { label: "Plan & usage", href: "/app/settings/plan", permission: "settings.view" },
 ];
 

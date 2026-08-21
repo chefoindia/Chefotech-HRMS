@@ -12,6 +12,8 @@ const { ok } = require("../../core/http/response");
 const { AppError } = require("../../core/errors/AppError");
 const { createTenantSchema, tenantUnique } = require("../../core/tenancy/baseSchema");
 const settings = require("../../core/settings/settings.service");
+const aiAssistant = require("../ai/aiAssistant.service");
+const { logger } = require("../../config/logger");
 
 /**
  * The help and guided-tour API.
@@ -147,6 +149,28 @@ router.post(
     }
 
     const matches = intents.match(req.body.query, { permissions: req.auth.permissions });
+    const confident = Boolean(matches[0] && matches[0].score >= 40);
+
+    // The local matcher only ever recognises the handful of things it was
+    // taught. Below its confidence threshold, and only there, the question is
+    // handed to the org's own Gemini key if one is configured — this is the
+    // "structure ready for a model to sit in front of it" moment. A tenant
+    // with no key configured, or an AI call that fails for any reason, still
+    // gets the exact static fallback they got before this existed: help must
+    // never depend on AI to avoid a dead end, only to do better than one.
+    let aiAnswer = null;
+    if (!confident) {
+      try {
+        const result = await aiAssistant.answer({ question: req.body.query });
+        aiAnswer = result.answer;
+      } catch (err) {
+        // AI_NOT_CONFIGURED is the ordinary, expected case for most tenants —
+        // not worth a log line. Anything else (a real Gemini failure) is.
+        if (err?.code !== "AI_NOT_CONFIGURED") {
+          logger.warn({ err: err?.message }, "AI help fallback failed");
+        }
+      }
+    }
 
     return ok(res, {
       enabled: true,
@@ -155,9 +179,10 @@ router.post(
       best: matches[0] || null,
       // Below this the match is a guess, and saying so is better than
       // confidently walking someone through the wrong screen.
-      confident: Boolean(matches[0] && matches[0].score >= 40),
+      confident,
+      aiAnswer,
       fallback:
-        matches.length === 0
+        matches.length === 0 && !aiAnswer
           ? "I could not find a walkthrough for that. Try naming the thing you want to change — for example \"leave policy\", \"half day\", \"biometric\" or \"payslip\"."
           : null,
     });

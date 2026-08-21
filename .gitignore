@@ -58,3 +58,11 @@ coverage/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Built app binaries — hundreds of MB, and git handles large binaries badly
+# (every clone downloads it, every rebuild doubles history size). Host these
+# on real object storage / a CDN in production, never commit them.
+frontend/public/downloads/
+mobile/android/
+mobile/*.apk
+mobile/*.aab

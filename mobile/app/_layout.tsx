@@ -87,9 +87,12 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            <SessionProvider>
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider>
+            {/* Inside Session and QueryClient deliberately: the organization's
+                brand colour is fetched here, which needs both a signed-in
+                session and react-query. */}
+            <ThemeProvider>
               <ToastProvider>
                 <AppLockGate>
                   <TourProvider>
@@ -97,9 +100,9 @@ export default function RootLayout() {
                   </TourProvider>
                 </AppLockGate>
               </ToastProvider>
-            </SessionProvider>
-          </QueryClientProvider>
-        </ThemeProvider>
+            </ThemeProvider>
+          </SessionProvider>
+        </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -8,8 +8,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "assetBundlePatterns": ["**/*"],
-
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chefotech.hrms",
@@ -24,7 +25,6 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-
     "android": {
       "package": "com.chefotech.hrms",
       "versionCode": 1,
@@ -34,7 +34,6 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -44,14 +43,15 @@
         "POST_NOTIFICATIONS",
         "VIBRATE"
       ],
-      "blockedPermissions": ["ACCESS_BACKGROUND_LOCATION", "RECORD_AUDIO"]
+      "blockedPermissions": [
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECORD_AUDIO"
+      ]
     },
-
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-
     "plugins": [
       "expo-router",
       "expo-secure-store",
@@ -64,7 +64,9 @@
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#0f172a" }
+          "dark": {
+            "backgroundColor": "#0f172a"
+          }
         }
       ],
       [
@@ -89,7 +91,6 @@
         }
       ]
     ],
-
     "experiments": {
       "typedRoutes": true
     }

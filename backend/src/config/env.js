@@ -102,6 +102,10 @@ const env = {
     rateLimitWindowMs: int(process.env.RATE_LIMIT_WINDOW_MS, 60_000),
     rateLimitMax: int(process.env.RATE_LIMIT_MAX, 300),
     authRateLimitMax: int(process.env.AUTH_RATE_LIMIT_MAX, 20),
+    // Encrypts tenant-supplied AI credentials (a Gemini API key) at rest.
+    // 32 random bytes, hex-encoded:
+    // node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+    credentialEncryptionKey: process.env.AI_CREDENTIAL_ENCRYPTION_KEY || "",
   },
 
   storage: {

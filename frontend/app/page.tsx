@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { MarketingHeader, MarketingFooter } from "@/components/marketing/Chrome";
 import {
+  AiHighlightSection,
   FaqAccordion,
   FeatureModules,
   FinalCta,
   Hero,
   IntegrationsSection,
   MetricsBand,
+  MobileAppBand,
   SecurityBand,
   TestimonialsSection,
 } from "@/components/marketing/Sections";
@@ -23,8 +25,10 @@ export const metadata: Metadata = {
  * The home page.
  *
  * Ordered the way a buyer actually evaluates a system: what it is, what it
- * does, can I trust it with payroll data, does it connect to what we already
- * run, what does it cost, and then the objections that usually stop a deal.
+ * does, can I trust it with payroll data, does AI actually help or is it a
+ * checkbox feature, does it connect to what we already run, is there an app
+ * for the team who is not at a desk, what does it cost, and then the
+ * objections that usually stop a deal.
  *
  * Sections are composed rather than written inline, so one can be reordered or
  * reused on another page without disturbing the rest.
@@ -37,7 +41,9 @@ export default function HomePage() {
         <Hero />
         <FeatureModules />
         <SecurityBand />
+        <AiHighlightSection />
         <IntegrationsSection />
+        <MobileAppBand />
         {/* Both of these hide themselves until there is something real to show. */}
         <MetricsBand />
         <TestimonialsSection />

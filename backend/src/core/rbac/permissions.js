@@ -163,6 +163,7 @@ const PERMISSION_GROUPS = [
       ["settings.manage_policies", "Change attendance and leave policies"],
       ["settings.manage_integrations", "Manage integrations and webhooks"],
       ["settings.manage_security", "Change security settings"],
+      ["settings.manage_ai", "Configure the organization's AI provider key"],
     ],
   },
   {

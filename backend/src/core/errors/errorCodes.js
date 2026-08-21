@@ -48,6 +48,15 @@ const ErrorCodes = {
   STORAGE_ERROR: { status: 502, message: "The file store could not be reached." },
   DEVICE_UNREACHABLE: { status: 502, message: "The biometric device could not be reached." },
   IMPORT_FAILED: { status: 422, message: "The import could not be completed." },
+
+  // AI (bring-your-own Gemini key)
+  AI_NOT_CONFIGURED: { status: 422, message: "No AI provider is configured for your organization." },
+  AI_INVALID_KEY: { status: 422, message: "The AI provider rejected this API key." },
+  AI_TIMEOUT: { status: 504, message: "The AI did not respond in time." },
+  AI_UNAVAILABLE: { status: 502, message: "Could not reach the AI service." },
+  AI_UPSTREAM_ERROR: { status: 502, message: "The AI service returned an error." },
+  AI_EMPTY_RESPONSE: { status: 502, message: "The AI returned an empty response." },
+  AI_MALFORMED_RESPONSE: { status: 502, message: "The AI's response could not be parsed." },
 };
 
 module.exports = { ErrorCodes };

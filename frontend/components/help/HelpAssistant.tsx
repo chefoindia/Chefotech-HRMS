@@ -31,6 +31,7 @@ export function HelpAssistant({ open, onClose }: { open: boolean; onClose: () =>
     matches: HelpMatch[];
     confident: boolean;
     fallback: string | null;
+    aiAnswer: string | null;
   } | null>(null);
   const [asking, setAsking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,6 +77,7 @@ export function HelpAssistant({ open, onClose }: { open: boolean; onClose: () =>
         matches: HelpMatch[];
         confident: boolean;
         fallback: string | null;
+        aiAnswer: string | null;
       }>("/help/ask", { query: question });
       setResult(data);
     } catch {
@@ -83,6 +85,7 @@ export function HelpAssistant({ open, onClose }: { open: boolean; onClose: () =>
         matches: [],
         confident: false,
         fallback: "Help is not reachable right now. Please try again in a moment.",
+        aiAnswer: null,
       });
     } finally {
       setAsking(false);
@@ -145,7 +148,17 @@ export function HelpAssistant({ open, onClose }: { open: boolean; onClose: () =>
             {submitted}
           </p>
 
-          {result.matches.length === 0 ? (
+          {result.matches.length === 0 && result.aiAnswer ? (
+            <div className="rounded-[var(--radius)] border border-brand-200 bg-brand-50/50 p-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-brand-700">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                Answered by your AI assistant
+              </p>
+              <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-[var(--text)]">
+                {result.aiAnswer}
+              </p>
+            </div>
+          ) : result.matches.length === 0 ? (
             <EmptyState
               icon={<Sparkles className="h-5 w-5" />}
               title="I could not find that"

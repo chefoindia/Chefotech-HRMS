@@ -149,6 +149,25 @@ export const NAV_SECTIONS = [
       cta: "How it works",
     },
   },
+  {
+    label: "Employee app",
+    columns: [
+      {
+        heading: "For your team",
+        links: [
+          { label: "Check in and out", description: "One tap, with an optional location", href: "/download#features" },
+          { label: "Apply for leave", description: "See the exact cost before submitting", href: "/download#features" },
+          { label: "Payslips and documents", description: "Downloadable, always with you", href: "/download#features" },
+        ],
+      },
+    ],
+    featured: {
+      title: "Get the app",
+      body: "Android and the web app today. Themed with your own brand colour automatically.",
+      href: "/download",
+      cta: "Download",
+    },
+  },
 ];
 
 /** Capability strip under the hero. Claims here are about the product itself. */
@@ -195,6 +214,94 @@ export const INTEGRATIONS: { name: string; category: string; available: boolean 
   { name: "SMTP email", category: "Notifications", available: true },
   { name: "Google Drive", category: "Storage", available: true },
   { name: "Cloudinary", category: "Storage", available: true },
+];
+
+/**
+ * The employee app's platforms. Android and the web app are real today;
+ * iOS is genuinely deferred — an Apple Developer Program membership is a
+ * recurring cost that only makes sense once there is revenue to justify it.
+ * That is stated on the download page rather than hidden, because a "Coming
+ * soon" with no reason reads as vapourware.
+ */
+export const APP_PLATFORMS = [
+  {
+    id: "web",
+    name: "Web app",
+    status: "live" as const,
+    body: "Works in any modern browser, on any device — including an iPhone. No install, no store, no update to wait for.",
+    cta: "Open the web app",
+    href: "/login",
+  },
+  {
+    id: "android",
+    name: "Android",
+    status: "live" as const,
+    body: "A native app: offline-tolerant, with biometric app-lock and push-ready notifications. Installed directly — no Play Store account needed to try it.",
+    cta: "Download for Android",
+    href: "/downloads/chefotech-hrms.apk",
+  },
+  {
+    id: "ios",
+    name: "iOS",
+    status: "planned" as const,
+    body: "The app is already built for iOS and is not blocked on engineering — it is one App Store submission away. It ships once an Apple Developer Program membership is in place.",
+    cta: "Notify me when it ships",
+    href: "/contact",
+  },
+];
+
+/** What the employee app actually does — used on /download and in the AI/automation sections. */
+export const APP_FEATURES = [
+  {
+    icon: "finger-print" as const,
+    title: "Check in from your phone",
+    body: "One tap to clock in and out. Your location is read only at that moment, never in the background — and only if your employer's policy asks for one.",
+  },
+  {
+    icon: "calendar" as const,
+    title: "Attendance you can read",
+    body: "Every day is coloured by its status. Tap one to see exactly which rule decided it, and raise a correction on the spot if it is wrong.",
+  },
+  {
+    icon: "airplane" as const,
+    title: "Leave, with the cost shown upfront",
+    body: "Pick your dates and see the exact day count — including how weekends inside the range are treated — before you submit.",
+  },
+  {
+    icon: "wallet" as const,
+    title: "Payslips, always with you",
+    body: "Every published payslip, downloadable as a PDF straight into your phone's share sheet — ready for a bank or a landlord.",
+  },
+  {
+    icon: "color-palette" as const,
+    title: "Themed like your company",
+    body: "The app's colour is your organisation's own brand colour, applied automatically the moment HR changes it in Settings — no update, no release.",
+  },
+  {
+    icon: "lock-closed" as const,
+    title: "Locked behind Face ID or a fingerprint",
+    body: "Optional, off by default, and only ever a convenience layer in front of the same secure sign-in — never a replacement for it.",
+  },
+];
+
+/**
+ * What the AI setup assistant actually does, for the homepage highlight
+ * section. Every line here corresponds to a real, shipped endpoint — nothing
+ * speculative.
+ */
+export const AI_HIGHLIGHTS = [
+  {
+    title: "Answers, mid-setup, in seconds",
+    body: "Stuck on what a field means while configuring a policy? Ask in plain words. The assistant is grounded in what this platform actually does, so it explains the real screen you are looking at rather than guessing.",
+  },
+  {
+    title: "Drafts the policy, you approve it",
+    body: "Describe a leave policy in one sentence — \"18 casual leaves, sandwich rule on weekends, no carry forward\" — and review a structured draft before anything is saved. Nothing is written until a human accepts it.",
+  },
+  {
+    title: "Runs on your own key",
+    body: "Bring your own Google Gemini API key. Usage and cost stay inside your own Google account — a busy month for your team never competes with any other customer's budget.",
+  },
 ];
 
 /** Answers on the home page. The full set lives on /support. */

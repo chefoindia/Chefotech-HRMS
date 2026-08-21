@@ -6,12 +6,17 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  Download,
   Minus,
   Plus,
+  Rocket,
   ShieldCheck,
+  Smartphone,
   Sparkles,
 } from "lucide-react";
 import {
+  AI_HIGHLIGHTS,
+  APP_PLATFORMS,
   CAPABILITY_STRIP,
   FEATURE_MODULES,
   HOME_FAQS,
@@ -355,6 +360,108 @@ export function MetricsBand() {
             )}
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The AI setup assistant, highlighted on its own.
+ *
+ * Every claim here maps to a shipped endpoint — `POST /help/ask` falling back
+ * to Gemini, and `POST /ai/draft/leave-policy` — not a roadmap item, which is
+ * why this is safe to put in front of a buyer before they have signed up.
+ */
+export function AiHighlightSection() {
+  return (
+    <section className="border-b bg-[var(--surface)]">
+      <div className="mx-auto max-w-7xl px-5 py-16 lg:py-20">
+        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-16">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[12.5px] font-medium text-brand-700">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              AI-assisted setup
+            </span>
+            <h2 className="mt-4 text-[28px] font-semibold tracking-tight text-[var(--text)] lg:text-[32px]">
+              Setup has a lot of screens. You are never stuck on one alone.
+            </h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-[var(--text-muted)]">
+              An HRMS has dozens of settings across attendance, leave and payroll, and it is easy
+              to freeze on a field wondering what it actually controls. The assistant answers
+              that in seconds, grounded in this product — and where it can, drafts the
+              configuration itself for you to review.
+            </p>
+            <Link
+              href="/app/settings/ai"
+              className="group mt-5 inline-flex items-center gap-1.5 text-[14.5px] font-medium text-brand-700 hover:underline"
+            >
+              Set up your own AI key
+              <ArrowRight
+                className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                aria-hidden
+              />
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {AI_HIGHLIGHTS.map((item) => (
+              <div key={item.title} className="rounded-xl border bg-[var(--surface-muted)] p-5">
+                <h3 className="text-[15px] font-semibold text-[var(--text)]">{item.title}</h3>
+                <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--text-muted)]">
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The employee-app promotion band — Android and web live today. */
+export function MobileAppBand() {
+  const live = APP_PLATFORMS.filter((p) => p.status === "live");
+
+  return (
+    <section className="border-b bg-[var(--surface-muted)]">
+      <div className="mx-auto max-w-5xl px-5 py-16 text-center lg:py-20">
+        <span className="inline-flex items-center gap-1.5 rounded-full border bg-[var(--surface)] px-3 py-1 text-[12.5px] font-medium text-[var(--text-muted)]">
+          <Smartphone className="h-3.5 w-3.5 text-brand-600" aria-hidden />
+          Employee app
+        </span>
+        <h2 className="mx-auto mt-4 max-w-2xl text-[28px] font-semibold tracking-tight text-[var(--text)] lg:text-[32px]">
+          Check in, apply for leave, read a payslip — from a phone
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-[var(--text-muted)]">
+          A native Android app and a web app that works on any device, themed automatically with
+          your own brand colour the moment you set one.
+        </p>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {live.map((platform) => (
+            <Link
+              key={platform.id}
+              href={platform.href}
+              {...(platform.id === "android" ? { download: true } : {})}
+              className="inline-flex h-11 items-center gap-2 rounded-lg border bg-[var(--surface)] px-5 text-[14.5px] font-medium text-[var(--text)] transition-colors hover:bg-[var(--surface-sunken)]"
+            >
+              {platform.id === "android" ? (
+                <Download className="h-4 w-4 text-brand-600" aria-hidden />
+              ) : (
+                <Rocket className="h-4 w-4 text-brand-600" aria-hidden />
+              )}
+              {platform.cta}
+            </Link>
+          ))}
+          <Link
+            href="/download"
+            className="inline-flex h-11 items-center gap-1.5 px-2 text-[14.5px] font-medium text-brand-700 hover:underline"
+          >
+            See everything it does
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
       </div>
     </section>
   );
