@@ -1,0 +1,44 @@
+{
+  "name": "@chefotech/hrms-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chefotech HRMS — multi-tenant HRMS SaaS API",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "seed": "node scripts/seed.js",
+    "seed:demo": "node scripts/seedDemoTenant.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "googleapis": "^161.0.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.19.0",
+    "multer": "^2.0.2",
+    "nanoid": "^3.3.11",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.6",
+    "papaparse": "^5.5.3",
+    "pdfkit": "^0.17.2",
+    "pino": "^9.13.1",
+    "pino-http": "^10.5.0",
+    "socket.io": "^4.8.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.2.3",
+    "nodemon": "^3.1.10",
+    "pino-pretty": "^13.1.2"
+  }
+}

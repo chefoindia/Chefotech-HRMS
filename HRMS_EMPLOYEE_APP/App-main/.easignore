@@ -1,0 +1,9 @@
+android/
+ios/
+.gradle/
+*.lock
+.git/
+node_modules/.cache/
+dist/
+.expo/
+%ProgramData%/

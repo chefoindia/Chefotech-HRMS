@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "340569928831",
+    "project_id": "grav-crm",
+    "storage_bucket": "grav-crm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:340569928831:android:5602d9310f72168f5d3b4a",
+        "android_client_info": {
+          "package_name": "com.grav.crm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATggr4tTudLqGeB75j1LprcL-yp4Il0Gg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
