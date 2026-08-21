@@ -1,0 +1,97 @@
+{
+  "expo": {
+    "name": "Chefotech HRMS",
+    "slug": "chefotech-hrms",
+    "scheme": "chefotech",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "assetBundlePatterns": ["**/*"],
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chefotech.hrms",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Chefotech HRMS records where you check in and out so your employer can confirm attendance at an approved work location. Location is read only at the moment you tap check in or check out, never in the background.",
+        "NSFaceIDUsageDescription": "Use Face ID to unlock Chefotech HRMS instead of typing your password each time.",
+        "NSPhotoLibraryUsageDescription": "Attach a photo or document to a leave request or an attendance correction.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+
+    "android": {
+      "package": "com.chefotech.hrms",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#4F46E5",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ],
+      "blockedPermissions": ["ACCESS_BACKGROUND_LOCATION", "RECORD_AUDIO"]
+    },
+
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-image",
+      "expo-sharing",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": { "backgroundColor": "#0f172a" }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Chefotech HRMS records where you check in and out so your employer can confirm attendance at an approved work location.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to unlock Chefotech HRMS instead of typing your password each time."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#4F46E5",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
+
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
