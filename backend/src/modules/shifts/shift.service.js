@@ -3,11 +3,12 @@
 const Shift = require("./shift.model");
 const WeeklyOffPolicy = require("./weeklyOffPolicy.model");
 const ShiftAssignment = require("./shiftAssignment.model");
+const ShiftPattern = require("./shiftPattern.model");
 const Employee = require("../employees/employee.model");
 const { AppError } = require("../../core/errors/AppError");
 const audit = require("../../core/audit/audit.service");
 const tenant = require("../../core/tenancy/tenantContext");
-const { weekdayIndex, weekdayOccurrence, eachDate } = require("../../shared/datetime");
+const { weekdayIndex, weekdayOccurrence, eachDate, daysBetween } = require("../../shared/datetime");
 
 /**
  * Shift resolution and weekly-off evaluation.
@@ -18,8 +19,53 @@ const { weekdayIndex, weekdayOccurrence, eachDate } = require("../../shared/date
  */
 
 /**
+ * Which shift a pattern puts on a given date, or null for a day off.
+ *
+ * Pure and synchronous so the attendance engine can call it per employee-day
+ * without another round trip, and so it is directly testable against a
+ * calendar rather than only through a payroll run.
+ *
+ * @returns {{ shiftId: string|null, isOff: boolean }|null} null when the
+ *   pattern says nothing about this date, so resolution should fall through.
+ */
+function evaluatePattern(pattern, dateString) {
+  if (!pattern || pattern.isActive === false) return null;
+
+  if (pattern.type === "weekly") {
+    const day = weekdayIndex(dateString);
+    const rule = (pattern.days || []).find((d) => d.day === day);
+    if (!rule) return null; // Weekday not covered — fall through to the standing shift.
+    return { shiftId: rule.shiftId ? String(rule.shiftId) : null, isOff: !rule.shiftId };
+  }
+
+  if (pattern.type === "rotating") {
+    const cycle = pattern.cycle || [];
+    if (!cycle.length || !pattern.anchorDate) return null;
+
+    // How far into the cycle this date sits. `daysBetween` is inclusive of
+    // both ends, so subtract one to make the anchor itself position 0.
+    const offset = daysBetween(pattern.anchorDate, dateString) - 1;
+    // A date before the anchor must still land somewhere sensible rather than
+    // on a negative index, so the remainder is normalised into range.
+    const length = cycle.length;
+    const position = ((offset % length) + length) % length;
+
+    const rule = cycle.find((c) => c.position === position);
+    if (!rule) return null;
+    return { shiftId: rule.shiftId ? String(rule.shiftId) : null, isOff: !rule.shiftId };
+  }
+
+  return null;
+}
+
+/**
  * The shift that applies to an employee on a given date.
- * Precedence: dated assignment → employee's standing shift → org default.
+ *
+ * Precedence, most specific first: a dated assignment (someone was explicitly
+ * rostered onto a shift for these dates) → a shift pattern (their standing
+ * rotation) → their standing single shift → the organization default. A
+ * pattern that marks the date as a day off returns null, which the attendance
+ * engine reads the same way it reads a weekly off.
  */
 async function resolveShiftForDate(employee, dateString, cache = null) {
   const employeeId = String(employee._id || employee);
@@ -38,6 +84,21 @@ async function resolveShiftForDate(employee, dateString, cache = null) {
       .sort({ createdAt: -1 })
       .lean();
     if (assignment) return Shift.findById(assignment.shiftId).lean();
+  }
+
+  const patternId = employee.employment && employee.employment.shiftPatternId;
+  if (patternId) {
+    const pattern =
+      cache && cache.patterns
+        ? cache.patterns[String(patternId)]
+        : await ShiftPattern.findById(patternId).lean();
+
+    const outcome = evaluatePattern(pattern, dateString);
+    if (outcome) {
+      if (outcome.isOff) return null;
+      if (cache && cache.shifts) return cache.shifts[outcome.shiftId] || null;
+      return Shift.findById(outcome.shiftId).lean();
+    }
   }
 
   const standing = employee.employment && employee.employment.shiftId;
@@ -93,9 +154,14 @@ async function resolveWeeklyOffPolicy(employee, cache = null) {
  * month for 500 employees is a handful of queries rather than tens of thousands.
  */
 async function buildResolutionCache({ employeeIds, fromDate, toDate }) {
-  const [shifts, policies, assignments, defaultShift, defaultWeeklyOff] = await Promise.all([
+  const [shifts, policies, patterns, assignments, defaultShift, defaultWeeklyOff] = await Promise.all([
     Shift.find({}).lean(),
     WeeklyOffPolicy.find({}).lean(),
+    // Loaded for the batch like everything else: without this the cached path
+    // would silently skip patterns and fall through to the standing shift,
+    // so a rostered night worker would be processed against a day shift for
+    // an entire payroll run with no error anywhere.
+    ShiftPattern.find({}).lean(),
     ShiftAssignment.find({
       employeeId: { $in: employeeIds },
       fromDate: { $lte: toDate },
@@ -114,6 +180,7 @@ async function buildResolutionCache({ employeeIds, fromDate, toDate }) {
   return {
     shifts: Object.fromEntries(shifts.map((s) => [String(s._id), s])),
     weeklyOffPolicies: Object.fromEntries(policies.map((p) => [String(p._id), p])),
+    patterns: Object.fromEntries(patterns.map((p) => [String(p._id), p])),
     assignments: byEmployee,
     defaultShift: defaultShift || null,
     defaultWeeklyOff: defaultWeeklyOff || null,
@@ -225,10 +292,12 @@ module.exports = {
   resolveShiftForDate,
   resolveWeeklyOffPolicy,
   evaluateWeeklyOff,
+  evaluatePattern,
   buildResolutionCache,
   assign,
   roster,
   Shift,
   WeeklyOffPolicy,
   ShiftAssignment,
+  ShiftPattern,
 };

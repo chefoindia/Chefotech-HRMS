@@ -26,23 +26,42 @@ const TIMEOUT_MS = 25_000;
  * structured fields instead of parsed out of free text. Passing one turns on
  * `responseMimeType: application/json` automatically.
  */
-async function generateContent({ apiKey, model = "gemini-2.0-flash", prompt, systemInstruction, responseSchema, temperature = 0.4 }) {
+async function generateContent({
+  apiKey,
+  model = "gemini-2.5-flash",
+  prompt,
+  contents,
+  systemInstruction,
+  responseSchema,
+  functionDeclarations,
+  temperature = 0.4,
+}) {
   if (!apiKey) throw new AppError("AI_NOT_CONFIGURED", { message: "No Gemini API key is configured." });
 
   const url = `${API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const body = {
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    // `contents` (a multi-turn history) takes precedence over a single `prompt`
+    // string — the chatbot passes a history, every other caller passes a prompt.
+    contents: contents || [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       temperature,
       maxOutputTokens: 2048,
-      ...(responseSchema
+      // Function calling and JSON-schema-constrained output are mutually
+      // exclusive in one request — a function-calling turn's "structured
+      // output" is the function call itself.
+      ...(responseSchema && !functionDeclarations
         ? { responseMimeType: "application/json", responseSchema }
         : {}),
     },
   };
   if (systemInstruction) {
     body.systemInstruction = { role: "system", parts: [{ text: systemInstruction }] };
+  }
+  if (functionDeclarations && functionDeclarations.length) {
+    body.tools = [{ functionDeclarations }];
+    // ANY (rather than AUTO) is deliberately not used here — the chatbot must
+    // be able to just talk, not be forced to call something on every turn.
   }
 
   const controller = new AbortController();
@@ -74,19 +93,33 @@ async function generateContent({ apiKey, model = "gemini-2.0-flash", prompt, sys
     // surfaced distinctly so the settings screen can say "check your key"
     // rather than a generic failure.
     const isKeyProblem = response.status === 400 || response.status === 403;
-    throw new AppError(isKeyProblem ? "AI_INVALID_KEY" : "AI_UPSTREAM_ERROR", {
-      message: isKeyProblem
-        ? "Gemini rejected this API key. Check that it was copied correctly and has not been revoked."
-        : `The AI service returned an error: ${message}`,
-      status: isKeyProblem ? 422 : 502,
-    });
+    // 404 here is specifically "this model id does not exist for this key" —
+    // Google retires and renames model ids on its own schedule (this app has
+    // already been caught out twice by a hardcoded name going stale), so this
+    // gets its own code rather than falling into the generic upstream bucket:
+    // it is the one failure `resolveWorkingModel` below can recover from by
+    // trying a different model, instead of giving up.
+    const isMissingModel = response.status === 404;
+    throw new AppError(
+      isKeyProblem ? "AI_INVALID_KEY" : isMissingModel ? "AI_MODEL_NOT_FOUND" : "AI_UPSTREAM_ERROR",
+      {
+        message: isKeyProblem
+          ? "Gemini rejected this API key. Check that it was copied correctly and has not been revoked."
+          : `The AI service returned an error: ${message}`,
+        status: isKeyProblem ? 422 : isMissingModel ? 422 : 502,
+      }
+    );
   }
 
   const candidate = payload?.candidates?.[0];
   const finishReason = candidate?.finishReason;
-  const text = candidate?.content?.parts?.map((part) => part.text || "").join("") || "";
+  const parts = candidate?.content?.parts || [];
+  const text = parts.map((part) => part.text || "").join("");
+  const functionCalls = parts
+    .filter((part) => part.functionCall)
+    .map((part) => ({ name: part.functionCall.name, args: part.functionCall.args || {} }));
 
-  if (!text) {
+  if (!text && !functionCalls.length) {
     throw new AppError("AI_EMPTY_RESPONSE", {
       message:
         finishReason === "SAFETY"
@@ -95,9 +128,9 @@ async function generateContent({ apiKey, model = "gemini-2.0-flash", prompt, sys
     });
   }
 
-  if (responseSchema) {
+  if (responseSchema && !functionDeclarations) {
     try {
-      return { text, json: JSON.parse(text) };
+      return { text, json: JSON.parse(text), functionCalls: [] };
     } catch {
       throw new AppError("AI_MALFORMED_RESPONSE", {
         message: "The AI's response could not be parsed. Please try again.",
@@ -105,7 +138,7 @@ async function generateContent({ apiKey, model = "gemini-2.0-flash", prompt, sys
     }
   }
 
-  return { text, json: null };
+  return { text, json: null, functionCalls };
 }
 
 /** A cheap, deterministic call used only to confirm a newly-pasted key actually works. */
@@ -119,4 +152,48 @@ async function verifyKey({ apiKey, model }) {
   return text.toLowerCase().includes("ok");
 }
 
-module.exports = { generateContent, verifyKey };
+/**
+ * The real, current list of models this specific key can use — asking Google
+ * directly instead of assuming a hardcoded id is still valid. Model ids get
+ * retired and renamed on Google's own schedule, independent of any release
+ * here, so this is the only way to pick a model that is actually guaranteed
+ * to work for this key right now.
+ */
+async function listModels({ apiKey }) {
+  if (!apiKey) throw new AppError("AI_NOT_CONFIGURED", { message: "No Gemini API key is configured." });
+
+  const url = `${API_BASE}/models?key=${encodeURIComponent(apiKey)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new AppError("AI_TIMEOUT", { message: "The AI did not respond in time. Please try again." });
+    }
+    logger.error({ err }, "Gemini model list request failed to send");
+    throw new AppError("AI_UNAVAILABLE", { message: "Could not reach the AI service." });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const isKeyProblem = response.status === 400 || response.status === 403;
+    throw new AppError(isKeyProblem ? "AI_INVALID_KEY" : "AI_UPSTREAM_ERROR", {
+      message: isKeyProblem
+        ? "Gemini rejected this API key. Check that it was copied correctly and has not been revoked."
+        : `The AI service returned an error: ${payload?.error?.message || `HTTP ${response.status}`}`,
+      status: isKeyProblem ? 422 : 502,
+    });
+  }
+
+  return (payload?.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map((m) => ({ id: String(m.name || "").replace(/^models\//, ""), displayName: m.displayName || m.name }));
+}
+
+module.exports = { generateContent, verifyKey, listModels };

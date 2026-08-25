@@ -6,6 +6,8 @@ import { Image as ImageIcon, Save, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { applyBranding, buildScale, readableTextColor } from "@/lib/theme";
+import { computeCompleteness } from "@/lib/completeness";
+import { CompletionBar } from "@/components/settings/CompletionBar";
 import { cn } from "@/lib/utils";
 import {
   Button,
@@ -157,6 +159,12 @@ export default function BrandingSettingsPage() {
   if (isLoading) return <PageLoader label="Loading branding" />;
 
   const scale = branding.primaryColor ? buildScale(branding.primaryColor) : {};
+  const wordingCompleteness = computeCompleteness(branding, [
+    "loginHeadline",
+    "loginSubtext",
+    "emailFooterText",
+    "pdfFooterText",
+  ]);
 
   return (
     <div className="space-y-5">
@@ -329,6 +337,9 @@ export default function BrandingSettingsPage() {
 
       <Card>
         <CardHeader title="Wording" description="Text that appears outside the application." />
+        <div className="mt-3">
+          <CompletionBar {...wordingCompleteness} label="Custom text set" />
+        </div>
 
         <div className="mt-5 space-y-4">
           <Input

@@ -101,7 +101,8 @@ export function TourEngine() {
   useEffect(() => {
     if (!active) return;
 
-    setAnswer("");
+    const suggested = (step?.field && state.prefill[step.field]) || "";
+    setAnswer(suggested);
     setValidationError(null);
     tourStore.setStuck(null);
 
@@ -314,6 +315,13 @@ export function TourEngine() {
                 <div className="mt-3 space-y-2">
                   {step.ask && (
                     <p className="text-[13.5px] font-medium text-[var(--text)]">{step.ask}</p>
+                  )}
+
+                  {step.field && state.prefill[step.field] && answer === state.prefill[step.field] && (
+                    <p className="flex items-center gap-1 text-[11.5px] text-brand-600">
+                      <Sparkles className="h-3 w-3" aria-hidden />
+                      Suggested from your conversation — check it, then confirm
+                    </p>
                   )}
 
                   {step.action === "input" ? (

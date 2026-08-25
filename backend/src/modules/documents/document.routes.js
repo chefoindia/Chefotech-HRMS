@@ -11,6 +11,7 @@ const { uploadSingle } = require("../../core/http/upload");
 const { objectId, objectIdParam, dateString } = require("../../core/validation/common");
 const { ok, created } = require("../../core/http/response");
 const { AppError } = require("../../core/errors/AppError");
+const { jsonTransform } = require("../../core/tenancy/baseSchema");
 
 const BlockSchema = z.object({
   type: z.enum([
@@ -112,7 +113,15 @@ router.use(authenticate());
 router.get(
   "/templates",
   requireAnyPermission("document.manage_templates", "document.generate"),
-  asyncHandler(async (req, res) => ok(res, await service.listTemplates(req.query)))
+  asyncHandler(async (req, res) => {
+    // listTemplates/getTemplate return plain .lean() objects for internal
+    // reuse elsewhere in this module (generate() needs the real _id to
+    // increment a numbering counter) — the schema's _id-to-id transform only
+    // runs on a live Mongoose document, so it is applied by hand here, at
+    // the HTTP boundary, rather than inside the service function.
+    const templates = await service.listTemplates(req.query);
+    return ok(res, templates.map((t) => jsonTransform(null, t)));
+  })
 );
 
 router.post(
@@ -125,7 +134,7 @@ router.get(
   "/templates/:id",
   requireAnyPermission("document.manage_templates", "document.generate"),
   validate({ params: objectIdParam() }),
-  asyncHandler(async (req, res) => ok(res, await service.getTemplate(req.params.id)))
+  asyncHandler(async (req, res) => ok(res, jsonTransform(null, await service.getTemplate(req.params.id))))
 );
 
 router.post(

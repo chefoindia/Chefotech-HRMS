@@ -10,6 +10,7 @@ const { INTENTS } = require("../../src/modules/help/helpIntents");
 const { TEMPLATES } = require("../../src/modules/notifications/notificationTemplates");
 const { ONBOARDING_STEPS } = require("../../src/modules/organizations/onboardingSteps");
 const { LANDING_ROUTES } = require("../../src/modules/auth/auth.service");
+const { ACTIONS } = require("../../src/modules/ai/actionRegistry");
 
 /**
  * Deep links are the one place the backend hard-codes knowledge of the
@@ -111,6 +112,14 @@ function collectLinks() {
     links.push({ url: route, source: `sign-in landing route for ${audience}` });
   }
 
+  // The chatbot's grounding data. If one of these routes is wrong, the
+  // chatbot confidently sends someone to a 404 — the exact failure mode this
+  // whole suite exists to catch, now reachable from a chat message instead
+  // of a tour or a notification.
+  for (const action of ACTIONS) {
+    if (action.route) links.push({ url: action.route, source: `action registry ${action.id}` });
+  }
+
   for (const [key, template] of Object.entries(TEMPLATES)) {
     // A wholly dynamic actionUrl is resolved at send time by the module that
     // raises the event; there is no literal route here to verify.
@@ -162,6 +171,18 @@ ${JSON.stringify(broken, null, 2)}`
     );
   });
 
+  await t.test("every route the chatbot's action registry can send someone to exists", () => {
+    const broken = collectLinks()
+      .filter((link) => link.source.startsWith("action registry"))
+      .filter((link) => !isServed(link.url, routes));
+    assert.deepEqual(
+      broken,
+      [],
+      `the chatbot's action registry references routes the app does not serve:
+${JSON.stringify(broken, null, 2)}`
+    );
+  });
+
   await t.test("no backend file hard-codes an app route this suite does not check", () => {
     // The guard's own blind spot, made visible. Any /app, /me or /onboarding
     // literal in a backend source file must come from a module this suite
@@ -173,6 +194,7 @@ ${JSON.stringify(broken, null, 2)}`
       path.join("modules", "workflow", "workflow.service.js"),
       path.join("modules", "organizations", "onboardingSteps.js"),
       path.join("modules", "auth", "auth.service.js"),
+      path.join("modules", "ai", "actionRegistry.js"),
     ];
     const SRC = path.resolve(__dirname, "../../src");
     const unchecked = [];

@@ -12,6 +12,9 @@ export {
   FieldGrid,
 } from "./Form";
 
+export { FieldHelp } from "./FieldHelp";
+export type { FieldHelpContent } from "./FieldHelp";
+
 export { Card, CardHeader, StatCard, PageHeader, DetailItem, DetailGrid } from "./Card";
 
 export { Badge, StatusBadge, CountPill } from "./Badge";

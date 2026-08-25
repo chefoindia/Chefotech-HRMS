@@ -304,20 +304,39 @@ test("an employee can read their own profile", async () => {
 });
 
 test("HR with the sensitive-data permission sees bank details; a manager without it does not", async () => {
-  const asHr = await api("GET", `/employees/${state.colleagueA._id}`, { token: state.tokenHrA });
+  // A real HR admin, not the org owner — the Owner role always has full
+  // access by design (rbac.service.js's resolveAccess grants it every
+  // permission live, precisely so it can never be quietly reduced), so
+  // stripping a permission from an owner's membership would not exercise
+  // what this test is actually about: does the sensitive-field-stripping
+  // logic honor a permission a non-owner role can genuinely lack.
+  const hrAdminRole = await tenant.runWithTenant(state.orgA._id, () => Role.findOne({ key: "HR_ADMIN" }));
+  const hrUser = await createUser("hradmin@alpha.test", "Priya", "Shah");
+  await tenant.runWithTenant(state.orgA._id, () =>
+    Membership.create({
+      organizationId: state.orgA._id,
+      userId: hrUser._id,
+      roleIds: [hrAdminRole._id],
+      permissions: hrAdminRole.permissions,
+      status: "active",
+    })
+  );
+  const tokenHrAdmin = await signIn("hradmin@alpha.test");
+
+  const asHr = await api("GET", `/employees/${state.colleagueA._id}`, { token: tokenHrAdmin });
   assert.equal(asHr.status, 200);
   assert.equal(asHr.body.data.bank.accountNumber, "9999888877");
 
-  // Strip the sensitive permission from the HR admin's role and try again.
+  // Strip the sensitive permission from this HR admin's membership and try again.
   await tenant.runWithTenant(state.orgA._id, async () => {
-    const membership = await Membership.findOne({ userId: state.orgA.ownerUserId });
+    const membership = await Membership.findOne({ userId: hrUser._id });
     membership.permissions = membership.permissions.filter((p) => p !== "employee.view_sensitive");
     await membership.save();
-    rbac.invalidateUser(String(state.orgA._id), String(state.orgA.ownerUserId));
+    rbac.invalidateUser(String(state.orgA._id), String(hrUser._id));
   });
 
   const withoutPermission = await api("GET", `/employees/${state.colleagueA._id}`, {
-    token: state.tokenHrA,
+    token: tokenHrAdmin,
   });
 
   assert.equal(withoutPermission.status, 200);

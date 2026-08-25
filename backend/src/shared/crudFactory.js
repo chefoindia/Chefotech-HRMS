@@ -5,6 +5,7 @@ const { AppError } = require("../core/errors/AppError");
 const audit = require("../core/audit/audit.service");
 const tenant = require("../core/tenancy/tenantContext");
 const { ok, created, paged } = require("../core/http/response");
+const { jsonTransform } = require("../core/tenancy/baseSchema");
 
 /**
  * A CRUD factory for the reference-data modules — departments, designations,
@@ -58,7 +59,14 @@ function createCrudService({
       model.countDocuments(finalFilter),
     ]);
 
-    return { items, page, limit, total };
+    // `.lean()` skips Mongoose documents entirely, so the schema's own
+    // `toJSON` transform (which renames `_id` to `id`) never runs — every
+    // other method here returns a real document and gets that for free.
+    // Without this, a list response has `_id` and no `id` at all, which
+    // means every row's edit/archive action (built on `row.id`) silently
+    // targets `/resource/undefined` and the list's React key is `undefined`
+    // for every row.
+    return { items: items.map((item) => jsonTransform(null, item)), page, limit, total };
   }
 
   async function getById(id) {

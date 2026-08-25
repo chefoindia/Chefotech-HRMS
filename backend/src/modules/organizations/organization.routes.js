@@ -192,6 +192,24 @@ router.get(
   asyncHandler(async (_req, res) => ok(res, await service.getOnboarding()))
 );
 
+/**
+ * Fill in the standard configuration a company needs to get started — a
+ * shift, an attendance policy, leave types and salary components.
+ *
+ * Runs automatically at signup; this endpoint exists for organizations
+ * created before it did, and for anyone who cleared something out and wants
+ * the conventional starting point back. Idempotent by code, so anything the
+ * customer has already set up is left untouched.
+ */
+router.post(
+  "/current/starter-data",
+  requirePermission("settings.manage"),
+  asyncHandler(async (_req, res) => {
+    const { seedStarterData } = require("../../core/setup/starterData.service");
+    return ok(res, await seedStarterData());
+  })
+);
+
 router.post(
   "/current/onboarding/:step",
   requirePermission("settings.manage"),

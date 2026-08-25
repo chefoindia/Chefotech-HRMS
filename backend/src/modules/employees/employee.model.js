@@ -184,6 +184,12 @@ const employeeSchema = createTenantSchema({
     noticePeriodDays: { type: Number, default: null },
 
     shiftId: { type: mongoose.Schema.Types.ObjectId, ref: "Shift", default: null },
+    /**
+     * A repeating roster, for anyone whose shift changes by day of week or on
+     * a rotation. Takes precedence over the single `shiftId` above — see
+     * `shift.service.resolveShiftForDate` for the full precedence order.
+     */
+    shiftPatternId: { type: mongoose.Schema.Types.ObjectId, ref: "ShiftPattern", default: null },
     weeklyOffPolicyId: { type: mongoose.Schema.Types.ObjectId, ref: "WeeklyOffPolicy", default: null },
     attendancePolicyId: { type: mongoose.Schema.Types.ObjectId, ref: "AttendancePolicy", default: null },
     leavePolicyId: { type: mongoose.Schema.Types.ObjectId, ref: "LeavePolicy", default: null },

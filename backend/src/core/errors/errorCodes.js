@@ -52,6 +52,7 @@ const ErrorCodes = {
   // AI (bring-your-own Gemini key)
   AI_NOT_CONFIGURED: { status: 422, message: "No AI provider is configured for your organization." },
   AI_INVALID_KEY: { status: 422, message: "The AI provider rejected this API key." },
+  AI_MODEL_NOT_FOUND: { status: 422, message: "That AI model is no longer available." },
   AI_TIMEOUT: { status: 504, message: "The AI did not respond in time." },
   AI_UNAVAILABLE: { status: 502, message: "Could not reach the AI service." },
   AI_UPSTREAM_ERROR: { status: 502, message: "The AI service returned an error." },

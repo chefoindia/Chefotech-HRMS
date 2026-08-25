@@ -28,18 +28,28 @@ export interface FieldProps {
   children: ReactNode;
   className?: string;
   htmlFor?: string;
+  /**
+   * Rendered immediately after the label text — in practice the `<FieldHelp>`
+   * info icon. A separate slot rather than widening `label` to ReactNode,
+   * because `Switch` also feeds `label` straight into `aria-label`, which
+   * must stay a plain string for screen readers.
+   */
+  labelSuffix?: ReactNode;
 }
 
-export function Field({ label, hint, error, required, children, className, htmlFor }: FieldProps) {
+export function Field({ label, hint, error, required, children, className, htmlFor, labelSuffix }: FieldProps) {
   return (
     <div className={cn("space-y-1.5", className)}>
       {label && (
         <label
           htmlFor={htmlFor}
-          className="block text-[13px] font-medium text-[var(--text)]"
+          className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--text)]"
         >
-          {label}
-          {required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+          <span>
+            {label}
+            {required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+          </span>
+          {labelSuffix}
         </label>
       )}
       {children}
@@ -64,10 +74,11 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   prefix?: ReactNode;
   suffix?: ReactNode;
   containerClassName?: string;
+  labelSuffix?: ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, hint, error, required, prefix, suffix, className, containerClassName, id, ...props },
+  { label, hint, error, required, prefix, suffix, className, containerClassName, id, labelSuffix, ...props },
   ref
 ) {
   const generatedId = useId();
@@ -92,6 +103,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       required={required}
       htmlFor={inputId}
       className={containerClassName}
+      labelSuffix={labelSuffix}
     >
       {prefix || suffix ? (
         <div className="relative">
@@ -118,17 +130,18 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   label?: string;
   hint?: string;
   error?: string;
+  labelSuffix?: ReactNode;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { label, hint, error, required, className, id, rows = 3, ...props },
+  { label, hint, error, required, className, id, rows = 3, labelSuffix, ...props },
   ref
 ) {
   const generatedId = useId();
   const textareaId = id || generatedId;
 
   return (
-    <Field label={label} hint={hint} error={error} required={required} htmlFor={textareaId}>
+    <Field label={label} hint={hint} error={error} required={required} htmlFor={textareaId} labelSuffix={labelSuffix}>
       <textarea
         ref={ref}
         id={textareaId}
@@ -147,17 +160,18 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string;
   options?: Array<{ value: string | number; label: string; disabled?: boolean }>;
   placeholder?: string;
+  labelSuffix?: ReactNode;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, hint, error, required, options, placeholder, className, id, children, ...props },
+  { label, hint, error, required, options, placeholder, className, id, children, labelSuffix, ...props },
   ref
 ) {
   const generatedId = useId();
   const selectId = id || generatedId;
 
   return (
-    <Field label={label} hint={hint} error={error} required={required} htmlFor={selectId}>
+    <Field label={label} hint={hint} error={error} required={required} htmlFor={selectId} labelSuffix={labelSuffix}>
       <div className="relative">
         <select
           ref={ref}
@@ -239,9 +253,10 @@ export interface SwitchProps {
   disabled?: boolean;
   id?: string;
   "data-tour"?: string;
+  labelSuffix?: ReactNode;
 }
 
-export function Switch({ checked, onChange, label, hint, disabled, id, ...props }: SwitchProps) {
+export function Switch({ checked, onChange, label, hint, disabled, id, labelSuffix, ...props }: SwitchProps) {
   const generatedId = useId();
   const switchId = id || generatedId;
 
@@ -250,8 +265,9 @@ export function Switch({ checked, onChange, label, hint, disabled, id, ...props 
       {(label || hint) && (
         <div className="min-w-0">
           {label && (
-            <label htmlFor={switchId} className="block text-sm font-medium text-[var(--text)]">
-              {label}
+            <label htmlFor={switchId} className="flex items-center gap-1.5 text-sm font-medium text-[var(--text)]">
+              <span>{label}</span>
+              {labelSuffix}
             </label>
           )}
           {hint && <p className="mt-0.5 text-[12.5px] text-[var(--text-muted)]">{hint}</p>}
@@ -274,8 +290,14 @@ export function Switch({ checked, onChange, label, hint, disabled, id, ...props 
       >
         <span
           className={cn(
-            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-            checked ? "translate-x-5.5" : "translate-x-0.5"
+            "absolute top-0.5 left-0 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+            // Tailwind's default scale has no "5.5" step (it jumps 3.5 -> 4 -> 5 ->
+            // 6...), so `translate-x-5.5` was silently not a real utility — the
+            // thumb never actually moved and rendered outside the track instead.
+            // An arbitrary-value class always compiles to real CSS regardless of
+            // the theme scale. Track is 44px wide, thumb is 20px: 2px inset when
+            // off, 44 - 20 - 2 = 22px inset when on.
+            checked ? "translate-x-[22px]" : "translate-x-[2px]"
           )}
         />
       </button>

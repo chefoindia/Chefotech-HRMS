@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Eye, FileText, Sparkles } from "lucide-react";
+import { AlertTriangle, Eye, FileText, Pencil, Plus, Sparkles } from "lucide-react";
 import { api, BASE_URL, API_PREFIX, tokens } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { formatDate, humanise } from "@/lib/format";
 import {
+  Badge,
   Button,
   Callout,
   Card,
@@ -19,9 +21,10 @@ import {
   Tabs,
   useToast,
 } from "@/components/ui";
+import { BLANK_TEMPLATE } from "@/lib/documentTemplateTypes";
 
 interface Template {
-  _id: string;
+  id: string;
   name: string;
   code: string;
   category: string;
@@ -39,6 +42,7 @@ interface ExpiringDocument {
 
 export default function DocumentsPage() {
   const { session, can } = useSession();
+  const router = useRouter();
   const toast = useToast();
   const queryClient = useQueryClient();
   const locale = session?.organization?.locale || "en-IN";
@@ -78,6 +82,19 @@ export default function DocumentsPage() {
     onError: (error) => toast.fromError(error, "Could not add the default templates."),
   });
 
+  const createBlank = useMutation({
+    mutationFn: async () => {
+      const code = `CUSTOM_${Date.now().toString(36).toUpperCase()}`;
+      const { data } = await api.post<Template>("/documents/templates", { ...BLANK_TEMPLATE, code });
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["document-templates"] });
+      router.push(`/app/documents/templates/${data.id}`);
+    },
+    onError: (error) => toast.fromError(error, "Could not create a new template."),
+  });
+
   if (!can("document.view") && !can("document.generate")) {
     return <NoAccessState what="documents" />;
   }
@@ -88,11 +105,22 @@ export default function DocumentsPage() {
         title="Documents"
         description="Offer letters, certificates and payslips generated from templates you control."
         actions={
-          can("document.manage_templates") &&
-          !templates?.length && (
-            <Button loading={seed.isPending} onClick={() => seed.mutate()} icon={<Sparkles className="h-4 w-4" />}>
-              Add the starter templates
-            </Button>
+          can("document.manage_templates") && (
+            <>
+              {!templates?.length && (
+                <Button
+                  variant="outline"
+                  loading={seed.isPending}
+                  onClick={() => seed.mutate()}
+                  icon={<Sparkles className="h-4 w-4" />}
+                >
+                  Add the starter templates
+                </Button>
+              )}
+              <Button loading={createBlank.isPending} onClick={() => createBlank.mutate()} icon={<Plus className="h-4 w-4" />}>
+                New template
+              </Button>
+            </>
           )
         }
       />
@@ -133,7 +161,7 @@ export default function DocumentsPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {templates.map((template) => (
-                <Card key={template._id} className="flex flex-col">
+                <Card key={template.id} className="flex flex-col">
                   <div className="flex items-start gap-3">
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
                       <FileText className="h-4.5 w-4.5" aria-hidden />
@@ -146,19 +174,26 @@ export default function DocumentsPage() {
                         {humanise(template.category)}
                       </p>
                     </div>
+                    {!template.isActive && <Badge tone="neutral">Inactive</Badge>}
                   </div>
 
-                  {can("document.generate") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-4"
-                      fullWidth
-                      onClick={() => setGenerating(template)}
-                    >
-                      Generate
-                    </Button>
-                  )}
+                  <div className="mt-4 flex gap-2">
+                    {can("document.manage_templates") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<Pencil className="h-3.5 w-3.5" />}
+                        onClick={() => router.push(`/app/documents/templates/${template.id}`)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {can("document.generate") && (
+                      <Button variant="outline" size="sm" fullWidth onClick={() => setGenerating(template)}>
+                        Generate
+                      </Button>
+                    )}
+                  </div>
                 </Card>
               ))}
             </div>
@@ -240,7 +275,7 @@ function GenerateDialog({ template, onClose }: { template: Template; onClose: ()
 
   const store = useMutation({
     mutationFn: async () => {
-      await api.post("/documents/generate", { templateId: template._id, employeeId });
+      await api.post("/documents/generate", { templateId: template.id, employeeId });
     },
     onSuccess: () => {
       toast.success("Document generated", "It has been attached to the employee's profile.");
@@ -263,7 +298,7 @@ function GenerateDialog({ template, onClose }: { template: Template; onClose: ()
           "Content-Type": "application/json",
           Authorization: `Bearer ${tokens.get()}`,
         },
-        body: JSON.stringify({ templateId: template._id, employeeId }),
+        body: JSON.stringify({ templateId: template.id, employeeId }),
       });
 
       if (!response.ok) throw new Error("Preview failed");

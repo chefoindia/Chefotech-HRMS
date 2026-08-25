@@ -3,10 +3,11 @@
 const Role = require("./role.model");
 const Membership = require("./membership.model");
 const { systemRoleDefinitions } = require("../../core/rbac/systemRoles");
-const { expandPermissions, isValidPermission } = require("../../core/rbac/permissions");
+const { ALL_PERMISSIONS, expandPermissions, isValidPermission } = require("../../core/rbac/permissions");
 const { AppError } = require("../../core/errors/AppError");
 const tenant = require("../../core/tenancy/tenantContext");
 const audit = require("../../core/audit/audit.service");
+const { jsonTransform } = require("../../core/tenancy/baseSchema");
 
 /**
  * Role and membership management.
@@ -59,7 +60,15 @@ async function seedRoles(organizationId) {
 }
 
 async function listRoles() {
-  return Role.find({}).sort({ rank: 1, name: 1 }).lean();
+  // `.lean()` skips the schema's own `_id` -> `id` transform (that only runs
+  // on a real Mongoose document's toJSON), so it's applied here by hand —
+  // the same class of bug already found and fixed in crudFactory.js's list
+  // endpoint and the document-templates module. Without it, every role in
+  // the list has the same `id: undefined`, which is exactly why clicking one
+  // role in a checkbox list (`checked={roleIds.includes(role.id)}`) makes
+  // every role in that list appear checked at once.
+  const roles = await Role.find({}).sort({ rank: 1, name: 1 }).lean();
+  return roles.map((r) => jsonTransform(null, r));
 }
 
 async function getRole(roleId) {
@@ -262,18 +271,30 @@ async function resolveAccess(organizationId, userId, { fresh = false } = {}) {
 
   if (!membership) return null;
 
+  const isOwner = (membership.roleIds || []).some((r) => r.isOwner);
+
   const entry = {
     membershipId: String(membership._id),
     employeeId: membership.employeeId ? String(membership.employeeId) : null,
     status: membership.status,
-    permissions: membership.permissions || [],
+    // The Owner role's stored `permissions` is a snapshot taken the moment
+    // the organization was created (or the role last saved) — it does not
+    // grow when a new permission is added to the registry later, because
+    // "*" is expanded to a concrete list at write time, not resolved live.
+    // Recomputing every tenant's Owner role each time the registry grows is
+    // a migration this platform would need to remember forever and will
+    // eventually forget once. Reading it live here instead means "Owner
+    // always has full access" is actually always true, for every tenant,
+    // the moment a permission is registered — matching what `updateRole()`
+    // already promises and refuses to let anyone break.
+    permissions: isOwner ? ALL_PERMISSIONS : membership.permissions || [],
     roles: (membership.roleIds || []).map((r) => ({
       id: String(r._id),
       key: r.key,
       name: r.name,
       isOwner: r.isOwner,
     })),
-    isOwner: (membership.roleIds || []).some((r) => r.isOwner),
+    isOwner,
     isManager: Boolean(membership.isManager),
   };
 

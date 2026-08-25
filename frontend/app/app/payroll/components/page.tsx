@@ -5,8 +5,22 @@ import { Calculator } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { formatMoney, humanise } from "@/lib/format";
-import { Badge, Callout, NoAccessState, UpgradeState } from "@/components/ui";
+import { Badge, Callout, FieldHelp, NoAccessState, UpgradeState } from "@/components/ui";
 import { MasterDataPage } from "@/components/data/MasterDataPage";
+import { FormulaBuilder } from "@/components/payroll/FormulaBuilder";
+import { PAYROLL_COMPONENT_HELP } from "@/content/settingsHelp";
+
+/** The info icon for one field, keyed by the path the form writes to. */
+function help(path: string, label: string) {
+  const content = PAYROLL_COMPONENT_HELP[path];
+  return content ? <FieldHelp label={label} help={content} /> : undefined;
+}
+
+/** Reads the calculation method out of the in-progress form values. */
+function methodOf(values: Record<string, unknown>) {
+  const calc = values.calculation as { method?: string } | undefined;
+  return calc?.method || "fixed";
+}
 
 interface Component {
   id: string;
@@ -63,20 +77,18 @@ export default function SalaryComponentsPage() {
   return (
     <>
       <Callout tone="info" className="mb-5">
-        <p className="font-medium">Formulas are configuration, not code</p>
+        <p className="font-medium">What this page is</p>
         <p className="mt-0.5">
-          Components are calculated in <strong>order</strong>, and each result becomes available to
-          the next. That is how the usual chain is expressed entirely as data:{" "}
-          <code className="font-mono text-[12px]">BASIC = pct(CTC_MONTHLY, 40)</code>, then{" "}
-          <code className="font-mono text-[12px]">HRA = pct(BASIC, 50)</code>, then{" "}
-          <code className="font-mono text-[12px]">PF = min(pct(BASIC, 12), 1800)</code>.
+          A payslip is a list of lines — money added, money taken off. Each line here is one of
+          those. You are describing, once, how each line is worked out; payroll then applies it to
+          every employee, every month, without anyone recalculating anything by hand.
         </p>
-        {variables && (
-          <p className="mt-1.5 text-[12.5px]">
-            Available: {variables.systemVariables.map((v) => v.code).slice(0, 8).join(", ")} and any
-            component code · Functions: {variables.functions.join(", ")}
-          </p>
-        )}
+        <p className="mt-1.5">
+          Lines are calculated in <strong>order</strong>, top to bottom, and each one can use the
+          results of the ones above it. That is how the usual chain works: Basic is a share of CTC,
+          House Rent Allowance is a share of Basic, Provident Fund is a share of Basic with a
+          ceiling. You choose those shapes from a list — you never have to write a formula.
+        </p>
       </Callout>
 
       <MasterDataPage<Component>
@@ -157,31 +169,42 @@ export default function SalaryComponentsPage() {
           },
         ]}
         fields={[
-          { path: "name", label: "Name", required: true, placeholder: "House Rent Allowance" },
+          {
+            path: "name",
+            label: "Name",
+            required: true,
+            placeholder: "House Rent Allowance",
+            hint: "As the employee will read it on their payslip.",
+            labelSuffix: help("name", "Name"),
+          },
           {
             path: "code",
-            label: "Code",
+            label: "Short code",
             required: true,
             placeholder: "HRA",
-            hint: "Uppercase. This is the name formulas use to reference it.",
+            hint: "Uppercase, no spaces. Other lines use this to refer to it.",
+            labelSuffix: help("code", "Short code"),
           },
           {
             path: "type",
-            label: "Type",
+            label: "Is this money added or taken off?",
             type: "select",
             required: true,
+            labelSuffix: help("type", "Is this money added or taken off?"),
             options: [
-              "earning",
-              "deduction",
-              "employer_contribution",
-              "reimbursement",
-              "informational",
-            ].map((value) => ({ value, label: humanise(value) })),
+              { value: "earning", label: "Added — an earning" },
+              { value: "deduction", label: "Taken off — a deduction" },
+              { value: "employer_contribution", label: "Paid by the company on top" },
+              { value: "reimbursement", label: "Repaying something they spent" },
+              { value: "informational", label: "Shown only, moves no money" },
+            ],
           },
           {
             path: "category",
             label: "Category",
             type: "select",
+            hint: "Used for grouping in reports. Does not affect the amount.",
+            labelSuffix: help("category", "Category"),
             options: [
               "basic",
               "allowance",
@@ -199,42 +222,78 @@ export default function SalaryComponentsPage() {
             label: "Calculation order",
             type: "number",
             min: 1,
-            hint: "Lower runs first. A component can only reference earlier ones.",
+            hint: "Lower runs first. A line can only use ones calculated before it.",
+            labelSuffix: help("order", "Calculation order"),
           },
           {
             path: "calculation.method",
-            label: "How is it calculated?",
+            label: "How is the amount worked out?",
             type: "select",
+            colSpan: 2,
+            labelSuffix: help("calculation.method", "How is the amount worked out?"),
             options: [
-              { value: "fixed", label: "A fixed amount" },
-              { value: "percentage", label: "A percentage of another component" },
-              { value: "formula", label: "A formula" },
-              { value: "attendance_based", label: "A per-day rate" },
-              { value: "manual", label: "Set per employee" },
+              { value: "fixed", label: "The same amount for everyone" },
+              { value: "percentage", label: "A percentage of another line" },
+              { value: "formula", label: "A step-by-step calculation (caps, thresholds, remainders)" },
+              { value: "attendance_based", label: "A rate for each day worked" },
+              { value: "manual", label: "Typed in on each employee's record" },
             ],
           },
-          { path: "calculation.amount", label: "Fixed amount", type: "number", min: 0 },
-          { path: "calculation.percentage", label: "Percentage", type: "number", min: 0 },
+
+          // Each branch below appears only for the method that actually reads
+          // it — otherwise every option is on screen at once and someone fills
+          // in a percentage the chosen method never looks at.
+          {
+            path: "calculation.amount",
+            label: "Amount per month",
+            type: "number",
+            min: 0,
+            showWhen: (values) => methodOf(values) === "fixed",
+            labelSuffix: help("calculation.amount", "Amount per month"),
+          },
+          {
+            path: "calculation.percentage",
+            label: "Percentage",
+            type: "number",
+            min: 0,
+            showWhen: (values) => methodOf(values) === "percentage",
+            labelSuffix: help("calculation.percentage", "Percentage"),
+          },
           {
             path: "calculation.ofComponent",
-            label: "Percentage of",
+            label: "Percentage of which line",
             placeholder: "BASIC",
-            hint: "A component code, or CTC_MONTHLY.",
+            hint: "A short code from another line, or CTC_MONTHLY.",
+            showWhen: (values) => methodOf(values) === "percentage",
+            labelSuffix: help("calculation.ofComponent", "Percentage of which line"),
           },
           {
             path: "calculation.expression",
-            label: "Formula",
-            type: "textarea",
-            placeholder: "min(pct(BASIC, 12), 1800)",
-            hint: "Rejected on save if it does not parse or references something unknown.",
+            label: "The calculation",
+            showWhen: (values) => methodOf(values) === "formula",
+            render: ({ value, onChange }) => (
+              <FormulaBuilder
+                value={String(value ?? "")}
+                componentCodes={variables?.componentVariables || []}
+                onChange={onChange}
+              />
+            ),
           },
+
           {
             path: "prorateOnAttendance",
             label: "Reduce this when the employee was absent",
             type: "checkbox",
             colSpan: 2,
+            labelSuffix: help("prorateOnAttendance", "Reduce this when the employee was absent"),
           },
-          { path: "showOnPayslip", label: "Show on the payslip", type: "checkbox", colSpan: 2 },
+          {
+            path: "showOnPayslip",
+            label: "Show this line on the payslip",
+            type: "checkbox",
+            colSpan: 2,
+            labelSuffix: help("showOnPayslip", "Show this line on the payslip"),
+          },
         ]}
         defaults={{
           type: "earning",

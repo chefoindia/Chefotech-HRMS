@@ -86,6 +86,19 @@ async function provision({ name, ownerUserId, planCode = "trial", timezone, curr
       });
 
       await Role.updateOne({ _id: ownerRole._id }, { $inc: { memberCount: 1 } });
+
+      // A working shift, attendance policy, leave types and salary components,
+      // so the first screen an administrator opens is a configuration they can
+      // adjust rather than an empty page they have to invent from nothing.
+      // Non-fatal on purpose: a seeding failure must not fail the signup.
+      try {
+        const { seedStarterData } = require("../../core/setup/starterData.service");
+        const seeded = await seedStarterData();
+        logger.info({ organizationId: String(organization._id), seeded }, "Starter configuration seeded");
+      } catch (err) {
+        logger.error({ err, organizationId: String(organization._id) }, "Could not seed starter configuration");
+      }
+
       return created;
     });
 

@@ -203,6 +203,11 @@ async function describe(groupKey) {
       group: d.group,
       label: d.label,
       description: d.description || null,
+      // The long-form explanation behind the info icon: what the setting
+      // actually does downstream, and a worked example with real values.
+      // Shipped in the same payload as the control itself, so a setting can
+      // never appear on screen without the explanation of what it changes.
+      help: d.help || null,
       type: d.type,
       options: d.options || null,
       validation: d.validation || null,

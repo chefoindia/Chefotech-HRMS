@@ -144,4 +144,4 @@ async function draftLeavePolicy(instruction) {
   return json;
 }
 
-module.exports = { answer, draftLeavePolicy };
+module.exports = { answer, draftLeavePolicy, PRODUCT_PRIMER };

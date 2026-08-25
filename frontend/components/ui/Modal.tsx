@@ -19,6 +19,21 @@ function useDialogBehaviour(open: boolean, onClose: () => void) {
   const contentRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Every caller passes an inline `onClose={() => setX(null)}`, so its
+  // identity changes on every render of the parent — including the render
+  // that typing a single character into a field inside the dialog causes.
+  // A ref absorbs that churn without it being a dependency below, so the
+  // effect's setup/teardown (and the 20ms auto-focus timer inside it) only
+  // ever runs when the dialog actually opens or closes, not on every
+  // keystroke. Previously `onClose` was a dependency, so every keystroke
+  // re-ran the effect and re-armed the timer, which refocused the dialog's
+  // first focusable element — the close button — out from under whatever
+  // field the person was typing into.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -42,7 +57,7 @@ function useDialogBehaviour(open: boolean, onClose: () => void) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -74,7 +89,7 @@ function useDialogBehaviour(open: boolean, onClose: () => void) {
       document.body.style.paddingRight = previousPadding;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return contentRef;
 }

@@ -4,6 +4,7 @@ const express = require("express");
 const { z } = require("zod");
 const Shift = require("./shift.model");
 const WeeklyOffPolicy = require("./weeklyOffPolicy.model");
+const ShiftPattern = require("./shiftPattern.model");
 const service = require("./shift.service");
 const { createCrudService, createCrudController } = require("../../shared/crudFactory");
 const { authenticate } = require("../auth/authenticate");
@@ -50,6 +51,24 @@ const WeeklyOffSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const PatternDaySchema = z.object({
+  day: z.number().int().min(0).max(6).optional(),
+  position: z.number().int().min(0).max(365).optional(),
+  shiftId: objectId().nullable().optional(),
+});
+
+const PatternSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  code: z.string().trim().min(1).max(20),
+  description: z.string().max(300).optional(),
+  type: z.enum(["weekly", "rotating"]).optional(),
+  days: z.array(PatternDaySchema).max(7).optional(),
+  cycle: z.array(PatternDaySchema).max(366).optional(),
+  anchorDate: dateString().nullable().optional(),
+  colour: z.string().max(9).optional(),
+  isActive: z.boolean().optional(),
+});
+
 const AssignSchema = z.object({
   employeeIds: z.array(objectId()).min(1).max(500),
   shiftId: objectId(),
@@ -90,11 +109,101 @@ const weeklyOffService = createCrudService({
   },
 });
 
+const patternService = createCrudService({
+  model: ShiftPattern,
+  entityType: "ShiftPattern",
+  searchFields: ["name", "code"],
+  async beforeDelete(doc) {
+    const Employee = require("../employees/employee.model");
+    const inUse = await Employee.countDocuments({
+      "employment.shiftPatternId": doc._id,
+      status: { $in: ["active", "on_leave", "notice_period"] },
+    });
+    if (inUse) {
+      throw AppError.conflict(
+        `${inUse} active ${inUse === 1 ? "employee is" : "employees are"} on this pattern. Move them first.`
+      );
+    }
+  },
+});
+
 const shiftController = createCrudController(shiftService);
 const weeklyOffController = createCrudController(weeklyOffService);
+const patternController = createCrudController(patternService);
 
 const router = express.Router();
 router.use(authenticate());
+
+// ── Shift patterns (before /:id, or "/patterns" is read as an id) ───────────
+
+router.get(
+  "/patterns",
+  requirePermission("shift.view"),
+  validate({ query: listQuery() }),
+  asyncHandler(patternController.list)
+);
+router.get(
+  "/patterns/:id",
+  requirePermission("shift.view"),
+  validate({ params: objectIdParam() }),
+  asyncHandler(patternController.get)
+);
+router.post(
+  "/patterns",
+  requirePermission("shift.manage"),
+  validate({ body: PatternSchema }),
+  asyncHandler(patternController.create)
+);
+router.patch(
+  "/patterns/:id",
+  requirePermission("shift.manage"),
+  validate({ params: objectIdParam(), body: PatternSchema.partial() }),
+  asyncHandler(patternController.update)
+);
+router.delete(
+  "/patterns/:id",
+  requirePermission("shift.manage"),
+  validate({ params: objectIdParam() }),
+  asyncHandler(patternController.remove)
+);
+
+/**
+ * What a pattern actually produces over a date range.
+ *
+ * A rotation is genuinely hard to picture from its configuration — "three on,
+ * three off, anchored to the 24th" tells you nothing about which shift a
+ * given Thursday lands on. This resolves real dates so the editor can show a
+ * calendar preview before anyone is rostered onto it.
+ */
+router.get(
+  "/patterns/:id/preview",
+  requirePermission("shift.view"),
+  validate({
+    params: objectIdParam(),
+    query: z.object({ fromDate: dateString(), toDate: dateString() }),
+  }),
+  asyncHandler(async (req, res) => {
+    const pattern = await ShiftPattern.findById(req.params.id).lean();
+    if (!pattern) throw AppError.notFound("Shift pattern");
+
+    const shifts = await Shift.find({}).select("name code startTime endTime colour").lean();
+    const byId = Object.fromEntries(shifts.map((s) => [String(s._id), s]));
+    const { eachDate } = require("../../shared/datetime");
+
+    const days = eachDate(req.query.fromDate, req.query.toDate, 92).map((date) => {
+      const outcome = service.evaluatePattern(pattern, date);
+      if (!outcome) return { date, shift: null, isOff: false, uncovered: true };
+      return {
+        date,
+        isOff: outcome.isOff,
+        uncovered: false,
+        shift: outcome.shiftId ? byId[outcome.shiftId] || null : null,
+      };
+    });
+
+    return ok(res, { pattern: { id: String(pattern._id), name: pattern.name, type: pattern.type }, days });
+  })
+);
 
 // ── Weekly off policies (before /:id) ───────────────────────────────────────
 

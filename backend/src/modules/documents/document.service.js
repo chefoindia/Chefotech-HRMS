@@ -324,7 +324,8 @@ async function generate(templateId, params, req) {
   }
 
   const logoBuffer = await loadLogo(template);
-  const buffer = await renderer.render(template, context, { logoBuffer });
+  const imageBuffers = await loadBlockImages(template);
+  const buffer = await renderer.render(template, context, { logoBuffer, imageBuffers });
 
   const subject = context.employee ? context.employee.employeeCode : "document";
   const fileName = `${template.code.toLowerCase()}-${subject}-${dt.todayString()}.pdf`;
@@ -353,6 +354,29 @@ async function loadLogo(template) {
     logger.warn({ err }, "Could not load the logo for a document");
     return null;
   }
+}
+
+/** Every image block's file, loaded once per render and keyed by fileId so pdfRenderer can look each one up by block.fileId. */
+async function loadBlockImages(template) {
+  const fileIds = [...new Set((template.blocks || []).filter((b) => b.type === "image" && b.fileId).map((b) => String(b.fileId)))];
+  if (!fileIds.length) return {};
+
+  const buffers = {};
+  await Promise.all(
+    fileIds.map(async (fileId) => {
+      try {
+        const file = await storage.StoredFile.findById(fileId).lean();
+        if (!file) return;
+        const { stream } = await storage.openStream(file);
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        buffers[fileId] = Buffer.concat(chunks);
+      } catch (err) {
+        logger.warn({ err, fileId }, "Could not load a document template image block");
+      }
+    })
+  );
+  return buffers;
 }
 
 /** Generate and attach the result to the employee's document list. */

@@ -42,6 +42,24 @@ export interface FieldDefinition {
   max?: number;
   colSpan?: 1 | 2;
   tour?: string;
+  /** The info icon shown beside the label — see `<FieldHelp>`. */
+  labelSuffix?: ReactNode;
+  /**
+   * Hide a field unless the current form values call for it. Without this
+   * every branch of a "how is this calculated?" choice is on screen at once,
+   * which is how someone ends up filling in a percentage that the chosen
+   * method never reads.
+   */
+  showWhen?: (values: Record<string, unknown>) => boolean;
+  /**
+   * Replace the generic control entirely — for fields that need a purpose-built
+   * editor rather than a text box, such as the guided salary-formula builder.
+   */
+  render?: (context: {
+    value: unknown;
+    values: Record<string, unknown>;
+    onChange: (value: unknown) => void;
+  }) => ReactNode;
 }
 
 export interface MasterDataPageProps<T> {
@@ -267,18 +285,21 @@ export function MasterDataPage<T extends { id: string }>({
             </Callout>
           )}
 
-          {fields.map((field) => (
-            <FieldControl
-              key={field.path}
-              field={field}
-              value={getValue(values, field.path)}
-              error={fieldErrors[field.path]}
-              onChange={(value) => {
-                setValues((current) => setPath(current, field.path, value));
-                setFieldErrors((current) => ({ ...current, [field.path]: "" }));
-              }}
-            />
-          ))}
+          {fields
+            .filter((field) => !field.showWhen || field.showWhen(values))
+            .map((field) => (
+              <FieldControl
+                key={field.path}
+                field={field}
+                values={values}
+                value={getValue(values, field.path)}
+                error={fieldErrors[field.path]}
+                onChange={(value) => {
+                  setValues((current) => setPath(current, field.path, value));
+                  setFieldErrors((current) => ({ ...current, [field.path]: "" }));
+                }}
+              />
+            ))}
         </div>
       </Modal>
 
@@ -306,15 +327,19 @@ export function MasterDataPage<T extends { id: string }>({
 function FieldControl({
   field,
   value,
+  values,
   error,
   onChange,
 }: {
   field: FieldDefinition;
   value: unknown;
+  values: Record<string, unknown>;
   error?: string;
   onChange: (value: unknown) => void;
 }) {
   const span = field.colSpan === 2 || field.type === "textarea" ? "sm:col-span-2" : "";
+
+  if (field.render) return <>{field.render({ value, values, onChange })}</>;
 
   if (field.type === "checkbox") {
     return (
@@ -325,7 +350,10 @@ function FieldControl({
           onChange={(event) => onChange(event.target.checked)}
           className="h-4 w-4 rounded border-[var(--border-strong)] accent-[var(--brand-600)]"
         />
-        <span className="text-[13.5px] text-[var(--text)]">{field.label}</span>
+        <span className="flex items-center gap-1.5 text-[13.5px] text-[var(--text)]">
+          <span>{field.label}</span>
+          {field.labelSuffix}
+        </span>
       </label>
     );
   }
@@ -333,9 +361,12 @@ function FieldControl({
   if (field.type === "select") {
     return (
       <div className={span}>
-        <label className="block text-[13px] font-medium text-[var(--text)]">
-          {field.label}
-          {field.required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+        <label className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--text)]">
+          <span>
+            {field.label}
+            {field.required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+          </span>
+          {field.labelSuffix}
         </label>
         <select
           value={String(value ?? "")}
@@ -362,7 +393,10 @@ function FieldControl({
   if (field.type === "textarea") {
     return (
       <div className={span}>
-        <label className="block text-[13px] font-medium text-[var(--text)]">{field.label}</label>
+        <label className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--text)]">
+          <span>{field.label}</span>
+          {field.labelSuffix}
+        </label>
         <textarea
           value={String(value ?? "")}
           onChange={(event) => onChange(event.target.value)}
@@ -382,9 +416,12 @@ function FieldControl({
 
   return (
     <div className={span}>
-      <label className="block text-[13px] font-medium text-[var(--text)]">
-        {field.label}
-        {field.required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+      <label className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--text)]">
+        <span>
+          {field.label}
+          {field.required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+        </span>
+        {field.labelSuffix}
       </label>
       <input
         type={field.type === "number" ? "number" : field.type === "time" ? "time" : field.type === "color" ? "color" : "text"}

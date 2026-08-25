@@ -13,6 +13,7 @@ import {
   CardHeader,
   EmptyState,
   FieldGrid,
+  FieldHelp,
   FieldSet,
   Input,
   NoAccessState,
@@ -21,6 +22,17 @@ import {
   Switch,
   useToast,
 } from "@/components/ui";
+import { ATTENDANCE_POLICY_HELP } from "@/content/settingsHelp";
+
+/**
+ * The info icon for one field, looked up by the same dotted path the form
+ * writes to. Returns undefined when a path has no entry, so a new field
+ * simply has no icon rather than breaking the form.
+ */
+function fieldHelp(path: string, label: string) {
+  const help = ATTENDANCE_POLICY_HELP[path];
+  return help ? <FieldHelp label={label} help={help} /> : undefined;
+}
 
 interface AttendancePolicy {
   id: string;
@@ -253,6 +265,7 @@ export default function AttendancePolicySettingsPage() {
           <div className="mt-5">
             <Input
               label="Policy name"
+              labelSuffix={fieldHelp("name", "Policy name")}
               value={draft.name}
               disabled={!canManage}
               onChange={(event) => set("name", event.target.value)}
@@ -268,6 +281,7 @@ export default function AttendancePolicySettingsPage() {
             <FieldGrid columns={2}>
               <Input
                 label="Grace period (minutes)"
+                labelSuffix={fieldHelp("arrival.graceMinutes", "Grace period (minutes)")}
                 type="number"
                 min={0}
                 max={240}
@@ -278,6 +292,7 @@ export default function AttendancePolicySettingsPage() {
               />
               <Input
                 label="Late beyond grace (minutes)"
+                labelSuffix={fieldHelp("arrival.lateAfterMinutes", "Late beyond grace (minutes)")}
                 type="number"
                 min={0}
                 disabled={!canManage}
@@ -287,6 +302,7 @@ export default function AttendancePolicySettingsPage() {
               />
               <Input
                 label="Half day if later than (minutes)"
+                labelSuffix={fieldHelp("arrival.halfDayAfterMinutes", "Half day if later than (minutes)")}
                 type="number"
                 min={0}
                 max={720}
@@ -298,6 +314,7 @@ export default function AttendancePolicySettingsPage() {
               />
               <Input
                 label="Absent if later than (minutes)"
+                labelSuffix={fieldHelp("arrival.absentAfterMinutes", "Absent if later than (minutes)")}
                 type="number"
                 min={0}
                 max={720}
@@ -314,6 +331,7 @@ export default function AttendancePolicySettingsPage() {
           <FieldSet title="Working hours" description="What counts as a full day and a half day.">
             <Select
               label="Measure against"
+              labelSuffix={fieldHelp("hours.basis", "Measure against")}
               value={draft.hours.basis}
               disabled={!canManage}
               onChange={(event) => set("hours.basis", event.target.value)}
@@ -330,6 +348,7 @@ export default function AttendancePolicySettingsPage() {
                 <>
                   <Input
                     label="Full day (% of shift)"
+                    labelSuffix={fieldHelp("hours.fullDayPercent", "Full day (% of shift)")}
                     type="number"
                     min={10}
                     max={100}
@@ -340,6 +359,7 @@ export default function AttendancePolicySettingsPage() {
                   />
                   <Input
                     label="Half day (% of shift)"
+                    labelSuffix={fieldHelp("hours.halfDayPercent", "Half day (% of shift)")}
                     type="number"
                     min={5}
                     max={100}
@@ -353,6 +373,7 @@ export default function AttendancePolicySettingsPage() {
                 <>
                   <Input
                     label="Full day (minutes)"
+                    labelSuffix={fieldHelp("hours.fullDayMinutes", "Full day (minutes)")}
                     type="number"
                     min={60}
                     max={1440}
@@ -363,6 +384,7 @@ export default function AttendancePolicySettingsPage() {
                   />
                   <Input
                     label="Half day (minutes)"
+                    labelSuffix={fieldHelp("hours.halfDayMinutes", "Half day (minutes)")}
                     type="number"
                     min={30}
                     max={720}
@@ -376,6 +398,7 @@ export default function AttendancePolicySettingsPage() {
 
               <Input
                 label="Minimum to count as present (minutes)"
+                labelSuffix={fieldHelp("hours.minimumMinutesForPresence", "Minimum to count as present (minutes)")}
                 type="number"
                 min={0}
                 max={720}
@@ -410,6 +433,7 @@ export default function AttendancePolicySettingsPage() {
           <FieldSet title="Late marks" description="Turn repeated lateness into a deduction.">
             <Switch
               label="Count late marks"
+              labelSuffix={fieldHelp("lateMarks.enabled", "Count late marks")}
               hint="When off, lateness is recorded but never costs a day."
               checked={draft.lateMarks.enabled}
               disabled={!canManage}
@@ -420,6 +444,7 @@ export default function AttendancePolicySettingsPage() {
               <FieldGrid columns={3}>
                 <Input
                   label="Late marks per deduction"
+                  labelSuffix={fieldHelp("lateMarks.countForDeduction", "Late marks per deduction")}
                   type="number"
                   min={1}
                   max={30}
@@ -431,6 +456,7 @@ export default function AttendancePolicySettingsPage() {
                 />
                 <Select
                   label="Deduction"
+                  labelSuffix={fieldHelp("lateMarks.deductionType", "Deduction")}
                   value={draft.lateMarks.deductionType}
                   disabled={!canManage}
                   onChange={(event) => set("lateMarks.deductionType", event.target.value)}
@@ -442,6 +468,7 @@ export default function AttendancePolicySettingsPage() {
                 />
                 <Select
                   label="Counter resets"
+                  labelSuffix={fieldHelp("lateMarks.resetPeriod", "Counter resets")}
                   value={draft.lateMarks.resetPeriod}
                   disabled={!canManage}
                   onChange={(event) => set("lateMarks.resetPeriod", event.target.value)}
@@ -460,6 +487,7 @@ export default function AttendancePolicySettingsPage() {
           <FieldSet title="Overtime" description="What is earned for working beyond the shift.">
             <Switch
               label="Track overtime"
+              labelSuffix={fieldHelp("overtime.enabled", "Track overtime")}
               checked={draft.overtime.enabled}
               disabled={!canManage}
               onChange={(value) => set("overtime.enabled", value)}
@@ -470,6 +498,7 @@ export default function AttendancePolicySettingsPage() {
                 <FieldGrid columns={3}>
                   <Input
                     label="Starts after (minutes)"
+                    labelSuffix={fieldHelp("overtime.startsAfterMinutes", "Starts after (minutes)")}
                     type="number"
                     min={0}
                     disabled={!canManage}
@@ -480,6 +509,7 @@ export default function AttendancePolicySettingsPage() {
                   />
                   <Input
                     label="Minimum to count (minutes)"
+                    labelSuffix={fieldHelp("overtime.minimumMinutes", "Minimum to count (minutes)")}
                     type="number"
                     min={0}
                     disabled={!canManage}
@@ -488,6 +518,7 @@ export default function AttendancePolicySettingsPage() {
                   />
                   <Input
                     label="Round down to (minutes)"
+                    labelSuffix={fieldHelp("overtime.roundToMinutes", "Round down to (minutes)")}
                     type="number"
                     min={0}
                     max={120}
@@ -501,6 +532,7 @@ export default function AttendancePolicySettingsPage() {
                 <FieldGrid columns={3}>
                   <Input
                     label="Normal day rate"
+                    labelSuffix={fieldHelp("overtime.normalDayRate", "Normal day rate")}
                     type="number"
                     disabled={!canManage}
                     value={draft.overtime.normalDayRate}
@@ -509,6 +541,7 @@ export default function AttendancePolicySettingsPage() {
                   />
                   <Input
                     label="Weekly off rate"
+                    labelSuffix={fieldHelp("overtime.weeklyOffRate", "Weekly off rate")}
                     type="number"
                     disabled={!canManage}
                     value={draft.overtime.weeklyOffRate}
@@ -516,6 +549,7 @@ export default function AttendancePolicySettingsPage() {
                   />
                   <Input
                     label="Holiday rate"
+                    labelSuffix={fieldHelp("overtime.holidayRate", "Holiday rate")}
                     type="number"
                     disabled={!canManage}
                     value={draft.overtime.holidayRate}
@@ -525,6 +559,7 @@ export default function AttendancePolicySettingsPage() {
 
                 <Switch
                   label="Overtime needs approval before it is payable"
+                  labelSuffix={fieldHelp("overtime.requiresApproval", "Overtime needs approval before it is payable")}
                   checked={draft.overtime.requiresApproval}
                   disabled={!canManage}
                   onChange={(value) => set("overtime.requiresApproval", value)}
@@ -541,6 +576,7 @@ export default function AttendancePolicySettingsPage() {
           >
             <Select
               label="A day with a missing punch is treated as"
+              labelSuffix={fieldHelp("missingPunch.treatAs", "A day with a missing punch is treated as")}
               value={draft.missingPunch.treatAs}
               disabled={!canManage}
               onChange={(event) => set("missingPunch.treatAs", event.target.value)}
@@ -555,6 +591,7 @@ export default function AttendancePolicySettingsPage() {
 
             <Switch
               label="Allow employees to request corrections"
+              labelSuffix={fieldHelp("regularization.enabled", "Allow employees to request corrections")}
               checked={draft.regularization.enabled}
               disabled={!canManage}
               onChange={(value) => set("regularization.enabled", value)}
@@ -564,6 +601,7 @@ export default function AttendancePolicySettingsPage() {
               <FieldGrid columns={2}>
                 <Input
                   label="How far back (days)"
+                  labelSuffix={fieldHelp("regularization.windowDays", "How far back (days)")}
                   type="number"
                   min={0}
                   max={90}
@@ -575,6 +613,7 @@ export default function AttendancePolicySettingsPage() {
                 />
                 <Input
                   label="Maximum per month"
+                  labelSuffix={fieldHelp("regularization.maxPerMonth", "Maximum per month")}
                   type="number"
                   min={0}
                   max={31}

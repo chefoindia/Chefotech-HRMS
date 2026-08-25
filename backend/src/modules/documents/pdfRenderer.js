@@ -57,7 +57,7 @@ async function render(template, context, options = {}) {
 
       for (const block of template.blocks || []) {
         if (!shouldRender(block, context)) continue;
-        drawBlock(doc, block, context, theme);
+        drawBlock(doc, block, context, theme, options);
       }
 
       drawFooters(doc, template, context, theme);
@@ -153,7 +153,7 @@ function drawWatermark(doc, template, theme) {
   doc.fillOpacity(1);
 }
 
-function drawBlock(doc, block, context, theme) {
+function drawBlock(doc, block, context, theme, options = {}) {
   const style = block.style || {};
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
@@ -205,6 +205,10 @@ function drawBlock(doc, block, context, theme) {
 
     case "signature":
       drawSignature(doc, block, context, theme, width);
+      break;
+
+    case "image":
+      drawImage(doc, block, width, options);
       break;
 
     case "divider":
@@ -348,6 +352,28 @@ function drawSignature(doc, block, context, theme, width) {
     });
 
   doc.y = y + 30;
+}
+
+/** Signature stamps, letterhead art, anything else a template author uploaded. */
+function drawImage(doc, block, width, options) {
+  const buffer = block.fileId && options.imageBuffers && options.imageBuffers[String(block.fileId)];
+  if (!buffer) return; // Not uploaded, or failed to load — skip rather than break the whole document.
+
+  try {
+    const height = block.height || 120;
+    const align = (block.style && block.style.align) || "left";
+    const imageWidth = Math.min(width, height * 3);
+    const x =
+      align === "center"
+        ? doc.page.margins.left + (width - imageWidth) / 2
+        : align === "right"
+          ? doc.page.margins.left + (width - imageWidth)
+          : doc.page.margins.left;
+    doc.image(buffer, x, doc.y, { fit: [imageWidth, height] });
+    doc.y += height + 6;
+  } catch (err) {
+    logger.warn({ err }, "Could not draw an image block; skipped");
+  }
 }
 
 function resolveRows(block, context) {

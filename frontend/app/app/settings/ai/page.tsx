@@ -201,12 +201,21 @@ export default function AiSettingsPage() {
                 </button>
               }
             />
-            <Select
-              label="Model"
-              value={model || data?.model || models.data?.[0]?.value || ""}
-              onChange={(event) => setModel(event.target.value)}
-              options={(models.data ?? []).map((m) => ({ value: m.value, label: m.label }))}
-            />
+            <div>
+              <Select
+                label="Model"
+                value={model || models.data?.[0]?.value || ""}
+                onChange={(event) => setModel(event.target.value)}
+                options={(models.data ?? []).map((m) => ({ value: m.value, label: m.label }))}
+              />
+              {data?.configured && data.model && (
+                <p className="mt-1.5 text-[12px] text-[var(--text-subtle)]">
+                  Currently using <span className="font-mono">{data.model}</span> — the specific
+                  model Google is currently offering for this key. Save again any time to
+                  re-check.
+                </p>
+              )}
+            </div>
           </FieldGrid>
 
           <div className="flex items-center gap-3">

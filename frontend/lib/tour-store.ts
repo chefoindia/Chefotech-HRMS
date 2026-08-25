@@ -19,6 +19,13 @@ export interface TourState {
   status: "idle" | "running" | "paused" | "completed";
   /** Set when a step's target cannot be found, so the overlay can explain. */
   stuckOn: string | null;
+  /**
+   * Values suggested by the AI chatbot, keyed by field name — pre-fills a
+   * step's answer input but never applies it. The user still has to look at
+   * the highlighted field and press "Fill in" themselves; this only saves
+   * them typing a value they already told the chatbot in conversation.
+   */
+  prefill: Record<string, string>;
 }
 
 const initialState: TourState = {
@@ -27,6 +34,7 @@ const initialState: TourState = {
   answers: {},
   status: "idle",
   stuckOn: null,
+  prefill: {},
 };
 
 let state: TourState = initialState;
@@ -51,7 +59,7 @@ export const tourStore = {
     return state;
   },
 
-  start(tour: Tour) {
+  start(tour: Tour, prefill: Record<string, string> = {}) {
     setState({
       tour,
       // Resume where the user left off rather than restarting from step one.
@@ -59,6 +67,7 @@ export const tourStore = {
       answers: {},
       status: "running",
       stuckOn: null,
+      prefill,
     });
   },
 

@@ -11,6 +11,8 @@ import {
   HelpCircle,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   User as UserIcon,
   X,
@@ -31,6 +33,7 @@ import { PoweredBy } from "@/components/brand/Logo";
 import { NotificationBell } from "./NotificationBell";
 import { HelpAssistant } from "@/components/help/HelpAssistant";
 import { TourEngine } from "@/components/help/TourEngine";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import { OnboardingBanner } from "./OnboardingBanner";
 
 /**
@@ -53,6 +56,36 @@ export function AppShell({
   const { session, loading, can, canAny, hasFeature, signOut } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Desktop sidebar visibility, remembered across visits so a preference set
+  // once (a wide monitor where the sidebar is never needed, say) sticks.
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    setSidebarHidden(localStorage.getItem("chefotech.sidebar_hidden") === "1");
+
+    // Driven by an inline style further down rather than a `lg:w-0` /
+    // `lg:w-64` Tailwind class pair: those two rules kept losing the
+    // cascade to each other unpredictably in this tree (confirmed correct
+    // in isolation, confirmed correct in the served CSS file, still 0px on
+    // the real element even after a cache-busted stylesheet reload — never
+    // pinned down which of Tailwind's own layer ordering or something
+    // upstream of it was responsible). An inline style has the highest
+    // specificity there is, so it can't lose to anything.
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarHidden((current) => {
+      const next = !current;
+      localStorage.setItem("chefotech.sidebar_hidden", next ? "1" : "0");
+      return next;
+    });
+  };
 
   // Anyone who reaches the shell without a session belongs on the sign-in page.
   useEffect(() => {
@@ -107,14 +140,23 @@ export function AppShell({
   const badges = { pendingApprovals };
 
   return (
-    <div className="min-h-screen lg:flex">
+    // `lg:items-start` is what lets the sticky sidebar work: the flex default
+    // of `stretch` would size it to the full page height, leaving it nothing
+    // to stick within.
+    <div className="min-h-screen lg:flex lg:items-start">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-[var(--sidebar-bg)] transition-transform lg:static lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          // `lg:sticky lg:top-0 lg:h-screen` rather than `lg:static`: static
+          // puts the sidebar in normal page flow, so it scrolled away with
+          // the content. Sticky pins it to the viewport and keeps its own
+          // nav scrolling independently of the page.
+          "fixed inset-y-0 left-0 z-40 w-64 overflow-hidden bg-[var(--sidebar-bg)] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-screen",
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
+        style={isDesktop && sidebarHidden ? { width: 0 } : undefined}
       >
+        <div className="flex h-full w-64 flex-col">
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-4">
           <Link href={variant === "portal" ? "/me" : "/app"} className="flex min-w-0 items-center gap-2.5">
             {organization?.branding?.logoUrl ? (
@@ -193,6 +235,7 @@ export function AppShell({
             <PoweredBy className="mt-2 px-3 text-[11px] text-white/40" />
           )}
         </div>
+        </div>
       </aside>
 
       {mobileOpen && (
@@ -213,6 +256,20 @@ export function AppShell({
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" aria-hidden />
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="hidden rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-sunken)] lg:block"
+            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+          >
+            {sidebarHidden ? (
+              <PanelLeftOpen className="h-5 w-5" aria-hidden />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" aria-hidden />
+            )}
           </button>
 
           <button
@@ -262,6 +319,11 @@ export function AppShell({
 
       <HelpAssistant open={helpOpen} onClose={() => setHelpOpen(false)} />
       <TourEngine />
+      {/* Every action it can offer is an admin/HR setup or configuration
+          screen, so it is only genuinely useful on the admin side — an
+          employee in the self-service portal has permission for almost none
+          of it, and "guide me through setup" is not their job. */}
+      {variant === "app" && <ChatWidget />}
     </div>
   );
 }

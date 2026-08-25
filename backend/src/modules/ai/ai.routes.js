@@ -4,6 +4,7 @@ const express = require("express");
 const { z } = require("zod");
 const service = require("./ai.service");
 const assistant = require("./aiAssistant.service");
+const chatbot = require("./chatbot.service");
 const { authenticate } = require("../auth/authenticate");
 const { requirePermission } = require("../../core/rbac/authorize");
 const { validate } = require("../../core/validation/validate");
@@ -105,6 +106,35 @@ router.post(
   strictLimiter,
   validate({ body: z.object({ instruction: z.string().trim().min(5).max(1000) }) }),
   asyncHandler(async (req, res) => ok(res, await assistant.draftLeavePolicy(req.body.instruction)))
+);
+
+/**
+ * The always-available setup guide. Open to anyone signed in, same reasoning
+ * as /assistant — every action it can hand back is already filtered to what
+ * the caller's own permissions allow, so this is never a way to discover or
+ * reach a screen the caller could not already navigate to directly.
+ */
+router.post(
+  "/chat",
+  strictLimiter,
+  validate({
+    body: z.object({
+      message: z.string().trim().min(1).max(1000),
+      history: z
+        .array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            text: z.string().max(4000),
+          })
+        )
+        .max(40)
+        .optional(),
+      route: z.string().max(200).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) =>
+    ok(res, await chatbot.chat(req.body, { permissions: req.auth.permissions }))
+  )
 );
 
 module.exports = router;

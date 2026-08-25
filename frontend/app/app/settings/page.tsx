@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { computeCompleteness } from "@/lib/completeness";
+import { CompletionBar } from "@/components/settings/CompletionBar";
 import {
   Button,
   Callout,
@@ -12,6 +14,7 @@ import {
   CardHeader,
   Checkbox,
   FieldGrid,
+  FieldHelp,
   FieldSet,
   Input,
   NoAccessState,
@@ -27,6 +30,7 @@ interface SettingDefinition {
   group: string;
   label: string;
   description: string | null;
+  help: { why: string; example?: string | null } | null;
   type: string;
   options: Array<{ value: string | number | boolean; label: string }> | null;
   validation: { min?: number; max?: number; maxLength?: number } | null;
@@ -123,6 +127,21 @@ export default function OrganizationSettingsPage() {
   const groupedSettings = groupBy(settings?.settings || [], (setting) => setting.group);
   const groupLabels = Object.fromEntries((settings?.groups || []).map((g) => [g.key, g]));
 
+  const profileCompleteness = computeCompleteness(profile, [
+    "legalName",
+    "registrationNumber",
+    "taxId",
+    "website",
+    "email",
+    "phone",
+    "address.line1",
+    "address.city",
+    "address.state",
+    "address.postalCode",
+    "timezone",
+    "currency",
+  ]);
+
   const valueOf = (setting: SettingDefinition) =>
     setting.key in dirtySettings ? dirtySettings[setting.key] : setting.value;
 
@@ -153,6 +172,10 @@ export default function OrganizationSettingsPage() {
             )
           }
         />
+
+        <div className="mt-3">
+          <CompletionBar {...profileCompleteness} />
+        </div>
 
         <div className="mt-5 space-y-5">
           <FieldSet title="Identity">
@@ -354,10 +377,16 @@ function SettingControl({
   disabled: boolean;
   onChange: (value: unknown) => void;
 }) {
+  // Every registry setting carries a `help` block explaining what it changes
+  // downstream plus a worked example, surfaced through this one icon so the
+  // consequence of a choice is readable before it is saved.
+  const helpIcon = setting.help ? <FieldHelp label={setting.label} help={setting.help} /> : undefined;
+
   if (setting.type === "boolean") {
     return (
       <Switch
         label={setting.label}
+        labelSuffix={helpIcon}
         hint={setting.description || undefined}
         checked={Boolean(value)}
         disabled={disabled}
@@ -370,6 +399,7 @@ function SettingControl({
     return (
       <Select
         label={setting.label}
+        labelSuffix={helpIcon}
         hint={setting.description || undefined}
         value={String(value ?? "")}
         disabled={disabled}
@@ -389,7 +419,10 @@ function SettingControl({
     const selected = Array.isArray(value) ? value.map(String) : [];
     return (
       <div>
-        <p className="text-[13px] font-medium text-[var(--text)]">{setting.label}</p>
+        <p className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--text)]">
+          <span>{setting.label}</span>
+          {helpIcon}
+        </p>
         {setting.description && (
           <p className="mt-0.5 text-[12.5px] text-[var(--text-muted)]">{setting.description}</p>
         )}
@@ -417,6 +450,7 @@ function SettingControl({
     return (
       <Input
         label={setting.label}
+        labelSuffix={helpIcon}
         hint={setting.description || "Separate values with commas"}
         disabled={disabled}
         value={Array.isArray(value) ? value.join(", ") : ""}
@@ -436,6 +470,7 @@ function SettingControl({
   return (
     <Input
       label={setting.label}
+      labelSuffix={helpIcon}
       hint={setting.description || undefined}
       disabled={disabled}
       type={setting.type === "number" ? "number" : setting.type === "time" ? "time" : "text"}
