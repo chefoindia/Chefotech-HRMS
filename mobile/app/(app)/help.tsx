@@ -10,6 +10,7 @@ import { useColors } from "../../src/theme/ThemeProvider";
 import { Card, Divider, EmptyState, Field, Row, Screen, SectionHeader, Txt } from "../../src/components/ui";
 import { radius, spacing } from "../../src/theme";
 import { useSession } from "../../src/auth/session";
+import { BRAND } from "../../src/brand";
 
 /**
  * Help and support.
@@ -46,7 +47,7 @@ export default function Help() {
     setTimeout(() => tour.start(tourId), 550);
   };
 
-  const supportEmail = "support@chefotech.com";
+  const supportEmail = BRAND.supportEmail;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceMuted }} edges={["top"]}>
@@ -153,7 +154,7 @@ export default function Help() {
                 onPress={() =>
                   Linking.openURL(
                     `mailto:${supportEmail}?subject=${encodeURIComponent(
-                      `Chefotech HRMS app — ${session?.organization?.name ?? "support"}`
+                      `${BRAND.name} app — ${session?.organization?.name ?? "support"}`
                     )}`
                   )
                 }

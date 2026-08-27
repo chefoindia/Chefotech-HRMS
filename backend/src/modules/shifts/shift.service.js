@@ -245,7 +245,16 @@ async function roster({ fromDate, toDate, employeeIds, departmentId }) {
   if (departmentId) filter["employment.departmentId"] = departmentId;
 
   const employees = await Employee.find(filter)
-    .select("employeeCode personal.firstName personal.lastName employment.shiftId employment.weeklyOffPolicyId employment.departmentId")
+    // employment.shiftPatternId is not optional here. resolveShiftForDate()
+    // reads it to decide whether a rotation applies, and a projection that
+    // omits it does not fail — the field is simply undefined, the pattern
+    // branch never runs, and every rostered employee silently falls back to
+    // their standing shift. The planner then shows a night worker on the day
+    // shift while attendance, which loads employees unprojected, resolves the
+    // rotation correctly. The grid and the payslip disagree and nothing logs.
+    .select(
+      "employeeCode personal.firstName personal.lastName employment.shiftId employment.shiftPatternId employment.weeklyOffPolicyId employment.departmentId"
+    )
     .sort({ employeeCode: 1 })
     .limit(300)
     .lean();

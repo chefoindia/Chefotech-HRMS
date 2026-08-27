@@ -73,6 +73,31 @@ What you will need:
 while the app only uses HTTPS. If you later add your own encryption, that
 declaration has to change.
 
+## Brand assets
+
+Every icon in `assets/` is generated from one source — the same mark the web
+app renders, at `../frontend/public/brand/chefotech-logo.png`. Regenerate them
+after the mark changes:
+
+```bash
+python scripts/generate-icons.py     # needs Pillow; not a project dependency
+```
+
+That writes the launcher icon, the Android adaptive layers, the themed-icon
+silhouette, both splash images, the web favicon, and `logo.png` — the
+transparent mark used *inside* the app, beside the wordmark. Each is written at
+the size and with the padding its platform expects.
+
+`logo.png` and `icon.png` are not interchangeable. The launcher icon is opaque
+and carries 28% padding because iOS masks it; using it in the UI puts a white
+square on the dark-mode login screen. Icon changes only reach a device through a
+native rebuild, so run `npx expo prebuild --clean` or a fresh EAS build after.
+
+The product name is **not** repeated in the UI. `src/brand.ts` is the only
+place the app names itself, and it reads the name and version from `app.json`
+through `expo-constants` — so the launcher label, the About line and the
+User-Agent cannot disagree with each other or go stale after a version bump.
+
 ## What is in here
 
 ```

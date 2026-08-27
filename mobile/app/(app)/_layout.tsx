@@ -5,6 +5,7 @@ import { Platform, View } from "react-native";
 import { useSession } from "../../src/auth/session";
 import { useColors } from "../../src/theme/ThemeProvider";
 import { useUnreadCount } from "../../src/api/hooks";
+import { fontStyle } from "../../src/theme/fonts";
 
 /**
  * The signed-in shell.
@@ -42,7 +43,7 @@ export default function AppLayout() {
           paddingTop: 6,
           paddingBottom: Platform.OS === "ios" ? 28 : 8,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+        tabBarLabelStyle: { fontSize: 11, ...fontStyle("500") },
       }}
     >
       <Tabs.Screen

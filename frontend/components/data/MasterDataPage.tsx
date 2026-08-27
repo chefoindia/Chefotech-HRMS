@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -11,12 +11,15 @@ import {
   Callout,
   ConfirmDialog,
   DataTable,
+  FieldHelp,
   Modal,
   PageHeader,
   TableToolbar,
   useToast,
   type Column,
 } from "@/components/ui";
+import { AiFill } from "@/components/forms/AiFill";
+import { helpByPath, useFormSchema } from "@/lib/formSchema";
 
 /**
  * Reference-data screens.
@@ -82,6 +85,13 @@ export interface MasterDataPageProps<T> {
   saveTour?: string;
   rowTour?: string;
   beforeSave?: (values: Record<string, unknown>) => Record<string, unknown>;
+  /**
+   * The form registry key for this entity. Supplying it turns on two things
+   * that need no per-page work: an info icon beside every field the registry
+   * explains, and the "describe it and I'll fill it in" bar at the top of the
+   * form. Both degrade to nothing when the key is absent or AI is not set up.
+   */
+  aiEntity?: string;
 }
 
 export function MasterDataPage<T extends { id: string }>({
@@ -104,6 +114,7 @@ export function MasterDataPage<T extends { id: string }>({
   saveTour,
   rowTour,
   beforeSave,
+  aiEntity,
 }: MasterDataPageProps<T>) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -119,6 +130,31 @@ export function MasterDataPage<T extends { id: string }>({
     resource,
     state,
     { limit: 50 }
+  );
+
+  // Field explanations come from the server's form registry, which is derived
+  // from the same Zod schema the save endpoint validates against — so an
+  // explanation can never describe a rule the field does not actually have.
+  const formSchema = useFormSchema(aiEntity);
+  const fieldHelp = useMemo(() => helpByPath(formSchema), [formSchema]);
+
+  /**
+   * Attach an info icon to any field the registry explains.
+   *
+   * A page that already passes its own `labelSuffix` keeps it — those are the
+   * hand-written screens that had help before this existed, and silently
+   * replacing them would lose the more specific wording.
+   */
+  const decoratedFields = useMemo(
+    () =>
+      fields.map((field) => {
+        if (field.labelSuffix || !fieldHelp[field.path]) return field;
+        return {
+          ...field,
+          labelSuffix: <FieldHelp label={field.label} help={fieldHelp[field.path]} />,
+        };
+      }),
+    [fields, fieldHelp]
   );
 
   const canManage = can(permissions.manage);
@@ -285,7 +321,28 @@ export function MasterDataPage<T extends { id: string }>({
             </Callout>
           )}
 
-          {fields
+          {aiEntity && canManage && (
+            <AiFill
+              entity={aiEntity}
+              current={values}
+              disabled={save.isPending}
+              onFilled={(filled) => {
+                // Merged over what is already there rather than replacing it,
+                // so a value the person typed themselves is not discarded by a
+                // draft that had nothing to say about that field.
+                setValues((current) => {
+                  let next = current;
+                  for (const [path, value] of Object.entries(filled)) {
+                    next = setPath(next, path, value);
+                  }
+                  return next;
+                });
+                setFieldErrors({});
+              }}
+            />
+          )}
+
+          {decoratedFields
             .filter((field) => !field.showWhen || field.showWhen(values))
             .map((field) => (
               <FieldControl
@@ -324,6 +381,25 @@ export function MasterDataPage<T extends { id: string }>({
   );
 }
 
+/**
+ * The line under a control.
+ *
+ * Error and hint are shown together rather than one replacing the other. They
+ * answer different questions — the hint says what the field is for, the error
+ * says what is wrong with what you typed — and collapsing them meant the
+ * explanation disappeared at the exact moment the user needed it, leaving
+ * "Required" with no indication of what a valid value would look like.
+ */
+function FieldFootnote({ error, hint }: { error?: string; hint?: string }) {
+  if (!error && !hint) return null;
+  return (
+    <>
+      {error && <p className="mt-1 text-[12.5px] text-[var(--danger)]">{error}</p>}
+      {hint && <p className="mt-1 text-[12.5px] text-[var(--text-muted)]">{hint}</p>}
+    </>
+  );
+}
+
 function FieldControl({
   field,
   value,
@@ -342,19 +418,26 @@ function FieldControl({
   if (field.render) return <>{field.render({ value, values, onChange })}</>;
 
   if (field.type === "checkbox") {
+    // A checkbox gets the same footnote as every other control. It used to
+    // render neither hint nor error, so a hint written for one was dropped
+    // without warning and a server-side validation error on it was invisible
+    // — the save simply failed with nothing marked.
     return (
-      <label className={`flex items-center gap-2.5 ${span}`}>
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(event) => onChange(event.target.checked)}
-          className="h-4 w-4 rounded border-[var(--border-strong)] accent-[var(--brand-600)]"
-        />
-        <span className="flex items-center gap-1.5 text-[13.5px] text-[var(--text)]">
-          <span>{field.label}</span>
-          {field.labelSuffix}
-        </span>
-      </label>
+      <div className={span}>
+        <label className="flex items-center gap-2.5">
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(event) => onChange(event.target.checked)}
+            className="h-4 w-4 rounded border-[var(--border-strong)] accent-[var(--brand-600)]"
+          />
+          <span className="flex items-center gap-1.5 text-[13.5px] text-[var(--text)]">
+            <span>{field.label}</span>
+            {field.labelSuffix}
+          </span>
+        </label>
+        <FieldFootnote error={error} hint={field.hint} />
+      </div>
     );
   }
 
@@ -381,11 +464,7 @@ function FieldControl({
             </option>
           ))}
         </select>
-        {(error || field.hint) && (
-          <p className={`mt-1 text-[12.5px] ${error ? "text-[var(--danger)]" : "text-[var(--text-muted)]"}`}>
-            {error || field.hint}
-          </p>
-        )}
+        <FieldFootnote error={error} hint={field.hint} />
       </div>
     );
   }
@@ -405,11 +484,7 @@ function FieldControl({
           data-tour={field.tour}
           className="input-base mt-1.5 resize-y"
         />
-        {(error || field.hint) && (
-          <p className={`mt-1 text-[12.5px] ${error ? "text-[var(--danger)]" : "text-[var(--text-muted)]"}`}>
-            {error || field.hint}
-          </p>
-        )}
+        <FieldFootnote error={error} hint={field.hint} />
       </div>
     );
   }
@@ -436,11 +511,7 @@ function FieldControl({
         }
         className={`input-base mt-1.5 ${field.type === "color" ? "h-9 w-20 cursor-pointer p-1" : ""}`}
       />
-      {(error || field.hint) && (
-        <p className={`mt-1 text-[12.5px] ${error ? "text-[var(--danger)]" : "text-[var(--text-muted)]"}`}>
-          {error || field.hint}
-        </p>
-      )}
+      <FieldFootnote error={error} hint={field.hint} />
     </div>
   );
 }

@@ -8,6 +8,8 @@
  * `target` matches a <TourTarget id="…"> in a screen. A step with no target is
  * a plain card, which is the right shape for an opening or closing message.
  */
+import { BRAND } from "../brand";
+
 
 export interface TourStep {
   id: string;
@@ -32,7 +34,7 @@ export const TOURS: Tour[] = [
     steps: [
       {
         id: "welcome",
-        title: "Welcome to Chefotech HRMS",
+        title: `Welcome to ${BRAND.name}`,
         body: "A short tour of the three things people use most. It takes about a minute, and you can leave at any point.",
       },
       {

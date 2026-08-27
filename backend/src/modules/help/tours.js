@@ -23,6 +23,15 @@
  *   completeWhen  urlMatches | elementVisible | elementGone | valueSet | manual
  */
 
+/**
+ * Month numbers as the payroll screen's own Month select renders them, so the
+ * walkthrough offers exactly the choices the field behind it accepts.
+ */
+const MONTHS = Array.from({ length: 12 }, (_, index) => ({
+  value: index + 1,
+  label: new Date(Date.UTC(2000, index, 1)).toLocaleString("en", { month: "long", timeZone: "UTC" }),
+}));
+
 const TOURS = [
   {
     id: "create_leave_policy",
@@ -444,6 +453,12 @@ const TOURS = [
         field: "month",
         title: "Which month?",
         ask: "Which month are you paying for?",
+        // The same twelve values the real control offers. A select step with
+        // neither `options` nor `optionsFrom` renders an empty dropdown, and a
+        // required empty dropdown can never be satisfied — with no Skip button
+        // on an input step, that left the payroll walkthrough with no way
+        // forward at all.
+        options: MONTHS,
         validate: { required: true },
         completeWhen: "valueSet",
       },

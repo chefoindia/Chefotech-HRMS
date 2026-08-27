@@ -29,7 +29,7 @@
       "package": "com.chefotech.hrms",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#4F46E5",
+        "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -65,6 +65,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
+            "image": "./assets/splash-icon-dark.png",
             "backgroundColor": "#0f172a"
           }
         }

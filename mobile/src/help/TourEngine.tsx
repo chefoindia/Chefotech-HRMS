@@ -15,6 +15,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { useColors } from "../theme/ThemeProvider";
 import { Button, Txt } from "../components/ui";
 import { radius, spacing } from "../theme";
+import { fontStyle } from "../theme/fonts";
 import { TOURS, type TourStep } from "./tours";
 
 /**
@@ -206,7 +207,7 @@ function TourOverlay({
         >
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: spacing.sm }}>
             <Ionicons name="sparkles" size={16} color={colors.brand[600]} />
-            <Txt variant="caption" tone="brand" style={{ marginLeft: 6, fontWeight: "600" }}>
+            <Txt variant="caption" tone="brand" style={[{ marginLeft: 6 }, fontStyle("600")]}>
               Step {index + 1} of {total}
             </Txt>
             <View style={{ flex: 1 }} />

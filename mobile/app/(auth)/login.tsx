@@ -11,13 +11,13 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Image } from "expo-image";
 import { useSession } from "../../src/auth/session";
 import { ApiError, getBaseUrl } from "../../src/api/client";
 import { useColors } from "../../src/theme/ThemeProvider";
 import { Button, Field, Txt } from "../../src/components/ui";
 import { spacing } from "../../src/theme";
 import { ServerSheet } from "../../src/components/ServerSheet";
+import { Wordmark } from "../../src/components/Wordmark";
 
 /**
  * Sign in.
@@ -90,13 +90,9 @@ export default function Login() {
         >
           <Animated.View entering={FadeInDown.duration(400)}>
             <View style={{ alignItems: "center", marginBottom: spacing["3xl"] }}>
-              <Image
-                source={require("../../assets/icon.png")}
-                style={{ width: 64, height: 64, borderRadius: 16 }}
-                contentFit="contain"
-                transition={200}
-              />
-              <Txt variant="title" style={{ marginTop: spacing.lg }}>
+              {/* Names the product before asking for a password — see Wordmark. */}
+              <Wordmark size="lg" />
+              <Txt variant="title" style={{ marginTop: spacing["2xl"] }}>
                 Welcome back
               </Txt>
               <Txt variant="body" tone="muted" style={{ marginTop: 4, textAlign: "center" }}>

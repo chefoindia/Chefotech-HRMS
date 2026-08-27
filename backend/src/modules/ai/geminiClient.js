@@ -26,6 +26,25 @@ const TIMEOUT_MS = 25_000;
  * structured fields instead of parsed out of free text. Passing one turns on
  * `responseMimeType: application/json` automatically.
  */
+/**
+ * Whether a 4xx from Gemini is actually about the credential.
+ *
+ * Google reports a bad key as 400 INVALID_ARGUMENT with a structured reason of
+ * API_KEY_INVALID, which is the same HTTP status it uses for a request we
+ * built wrong. The reason — or failing that the message — is the only thing
+ * that separates them.
+ */
+function mentionsApiKey(payload) {
+  const error = payload && payload.error;
+  if (!error) return false;
+
+  const reasons = (error.details || []).map((d) => String(d.reason || "").toUpperCase());
+  if (reasons.some((reason) => reason.includes("API_KEY"))) return true;
+
+  const text = `${error.status || ""} ${error.message || ""}`.toUpperCase();
+  return text.includes("API_KEY") || text.includes("API KEY");
+}
+
 async function generateContent({
   apiKey,
   model = "gemini-2.5-flash",
@@ -92,7 +111,15 @@ async function generateContent({
     // 400 with an API-key reason is the caller's key being wrong, not our bug —
     // surfaced distinctly so the settings screen can say "check your key"
     // rather than a generic failure.
-    const isKeyProblem = response.status === 400 || response.status === 403;
+    //
+    // The reason has to actually be read, though. Gemini also returns 400
+    // INVALID_ARGUMENT for a malformed request — an empty function-calling
+    // enum, a bad response schema — and treating every 400 as a bad key sent
+    // an administrator off to re-enter a credential that was never the
+    // problem. Worse, saveKey() aborts its model-candidate loop the moment it
+    // sees AI_INVALID_KEY, so one malformed probe request could make a
+    // perfectly good key unsaveable.
+    const isKeyProblem = response.status === 403 || (response.status === 400 && mentionsApiKey(payload));
     // 404 here is specifically "this model id does not exist for this key" —
     // Google retires and renames model ids on its own schedule (this app has
     // already been caught out twice by a hardcoded name going stale), so this
@@ -196,4 +223,4 @@ async function listModels({ apiKey }) {
     .map((m) => ({ id: String(m.name || "").replace(/^models\//, ""), displayName: m.displayName || m.name }));
 }
 
-module.exports = { generateContent, verifyKey, listModels };
+module.exports = { generateContent, verifyKey, listModels, mentionsApiKey };

@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import { Alert, Linking, Platform } from "react-native";
 import { usePunch, type TodayStatus } from "../api/hooks";
 import { ApiError } from "../api/client";
+import { BRAND } from "../brand";
 
 /**
  * Check in and out.
@@ -49,7 +50,7 @@ export function useCheckIn(today: TodayStatus | undefined) {
       if (!existing.canAskAgain) {
         Alert.alert(
           "Location is off",
-          "Your check-in will still be recorded, but without a location. If your employer requires one, turn location on for Chefotech HRMS in Settings.",
+          `Your check-in will still be recorded, but without a location. If your employer requires one, turn location on for ${BRAND.name} in Settings.`,
           [
             { text: "Not now", style: "cancel" },
             {

@@ -15,6 +15,7 @@ import { Card, Divider, Row, Screen, SectionHeader, Txt } from "../../src/compon
 import { spacing } from "../../src/theme";
 import { useToast } from "../../src/components/Toast";
 import { ServerSheet } from "../../src/components/ServerSheet";
+import { BRAND } from "../../src/brand";
 
 /**
  * Settings.
@@ -68,7 +69,7 @@ export default function Settings() {
     if (!result.granted) {
       Alert.alert(
         "Notifications are off",
-        "You can turn them on for Chefotech HRMS in your phone's Settings. Without them you will not be told when leave is approved or a payslip is published.",
+        `You can turn them on for ${BRAND.name} in your phone's Settings. Without them you will not be told when leave is approved or a payslip is published.`,
         [{ text: "OK" }]
       );
     }
@@ -178,7 +179,7 @@ export default function Settings() {
 
         <SectionHeader title="About" />
         <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-          <Row icon="information-circle-outline" title="Version" right={<Txt variant="label" tone="muted">1.0.0</Txt>} />
+          <Row icon="information-circle-outline" title="Version" right={<Txt variant="label" tone="muted">{BRAND.version}</Txt>} />
           <Divider />
           <Row
             icon="help-circle-outline"

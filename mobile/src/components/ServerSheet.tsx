@@ -6,6 +6,7 @@ import { useColors } from "../theme/ThemeProvider";
 import { Button, Field, Txt } from "./ui";
 import { radius, spacing } from "../theme";
 import { useToast } from "./Toast";
+import { BRAND } from "../brand";
 
 /**
  * Where the app points.
@@ -88,8 +89,8 @@ export function ServerSheet({
           </View>
 
           <Txt variant="body" tone="muted" style={{ marginBottom: spacing.lg, lineHeight: 21 }}>
-            Only change this if your employer runs Chefotech on their own servers and has given
-            you an address.
+            Only change this if your employer runs {BRAND.name} on their own servers and has
+            given you an address.
           </Txt>
 
           <Field

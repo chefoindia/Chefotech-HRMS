@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useColors, useTheme } from "../theme/ThemeProvider";
 import { HIT_SLOP, MIN_TAP, radius, shadow, spacing, type } from "../theme";
+import { fontStyle, type FontWeight } from "../theme/fonts";
 
 /**
  * The shared UI kit.
@@ -49,7 +50,18 @@ export function Txt({
     onBrand: colors.onBrand,
   };
   return (
-    <Text style={[type[variant] as object, { color: toneColor[tone] }, style]} {...rest}>
+    <Text
+      style={[
+        type[variant] as object,
+        // The variant already states its weight; this turns that into the
+        // matching Inter file, because React Native will not pick one from
+        // `fontWeight` alone on Android.
+        fontStyle((type[variant] as { fontWeight?: FontWeight }).fontWeight),
+        { color: toneColor[tone] },
+        style,
+      ]}
+      {...rest}
+    >
       {children}
     </Text>
   );
@@ -83,7 +95,7 @@ export function Button({
     primary: { bg: colors.brand[600], fg: colors.onBrand, border: "transparent" },
     secondary: { bg: colors.surface, fg: colors.text, border: colors.border },
     ghost: { bg: "transparent", fg: colors.brand[600], border: "transparent" },
-    danger: { bg: colors.danger, fg: "#ffffff", border: "transparent" },
+    danger: { bg: colors.danger, fg: colors.onBrand, border: "transparent" },
   }[variant];
 
   return (
@@ -116,7 +128,8 @@ export function Button({
           {icon && <Ionicons name={icon} size={18} color={palette.fg} style={{ marginRight: 8 }} />}
           <Text
             style={[
-              { fontSize: size === "sm" ? 14 : 15.5, fontWeight: "600", color: palette.fg },
+              { fontSize: size === "sm" ? 14 : 15.5, color: palette.fg },
+              fontStyle("600"),
             ]}
           >
             {title}
@@ -238,7 +251,7 @@ export function Badge({
         alignSelf: "flex-start",
       }}
     >
-      <Text style={{ fontSize: 12, fontWeight: "600", color: palette.fg }}>{label}</Text>
+      <Text style={[{ fontSize: 12, color: palette.fg }, fontStyle("600")]}>{label}</Text>
     </View>
   );
 }

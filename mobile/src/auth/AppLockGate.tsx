@@ -7,6 +7,7 @@ import { useColors } from "../theme/ThemeProvider";
 import { Button, Txt } from "../components/ui";
 import { spacing, radius } from "../theme";
 import { useSession } from "./session";
+import { BRAND } from "../brand";
 
 /**
  * Optional biometric lock.
@@ -71,7 +72,7 @@ export function AppLockGate({ children }: { children: ReactNode }) {
     setChecking(true);
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Unlock Chefotech HRMS",
+        promptMessage: `Unlock ${BRAND.name}`,
         // Falling back to the device passcode means someone whose fingerprint
         // is not being recognised — wet hands on a factory floor — is not
         // locked out of their own attendance.

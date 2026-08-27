@@ -10,6 +10,8 @@
  * support ticket from an employee is really a question about why a number came
  * out the way it did.
  */
+import { BRAND } from "../brand";
+
 
 export interface HelpArticle {
   id: string;
@@ -45,7 +47,7 @@ export const HELP_ARTICLES: (HelpArticle & { category: string })[] = [
     category: "attendance",
     question: "I said no to location. Can I still check in?",
     answer:
-      "Yes. The app will still record your check-in without a location.\n\nWhether that is accepted is your employer's policy, not the app's — if they require a location, the server will tell you so when you tap. You can turn location back on for Chefotech HRMS in your phone's Settings at any time.",
+      "Yes. The app will still record your check-in without a location.\n\nWhether that is accepted is your employer's policy, not the app's — if they require a location, the server will tell you so when you tap. You can turn location back on for " + BRAND.name + " in your phone's Settings at any time.",
     keywords: ["location", "gps", "permission", "denied", "geofence"],
   },
   {

@@ -5,12 +5,15 @@ const { z } = require("zod");
 const service = require("./ai.service");
 const assistant = require("./aiAssistant.service");
 const chatbot = require("./chatbot.service");
+const formDraft = require("./formDraft.service");
+const formRegistry = require("../../core/forms/formRegistry");
 const { authenticate } = require("../auth/authenticate");
 const { requirePermission } = require("../../core/rbac/authorize");
 const { validate } = require("../../core/validation/validate");
 const { asyncHandler } = require("../../core/http/asyncHandler");
 const { ok } = require("../../core/http/response");
 const { strictLimiter } = require("../../core/security/rateLimit");
+const { AppError } = require("../../core/errors/AppError");
 
 /**
  * AI features, all built on one organization-supplied Gemini key.
@@ -134,6 +137,57 @@ router.post(
   }),
   asyncHandler(async (req, res) =>
     ok(res, await chatbot.chat(req.body, { permissions: req.auth.permissions }))
+  )
+);
+
+/**
+ * The shape of every form the caller is allowed to fill, with each field's
+ * explanation attached.
+ *
+ * The frontend renders the info icons from this rather than carrying its own
+ * copy of the help text, so an explanation added on the server appears beside
+ * the input without a redeploy — and, more importantly, cannot disagree with
+ * the validation the same field is about to be checked against.
+ */
+router.get(
+  "/forms",
+  asyncHandler(async (req, res) => ok(res, formRegistry.describeAll(req.auth.permissions)))
+);
+
+router.get(
+  "/forms/:entity",
+  validate({ params: z.object({ entity: z.string().max(60) }) }),
+  asyncHandler(async (req, res) => {
+    const described = formRegistry.describeEntity(req.params.entity);
+    if (!described) throw AppError.notFound("Form");
+    if (described.permission && !req.auth.permissions.includes(described.permission)) {
+      throw AppError.forbidden("You do not have permission to open this form.");
+    }
+    return ok(res, described);
+  })
+);
+
+/**
+ * "Fill this in for me", for any form in the registry.
+ *
+ * Gated on the permission needed to SAVE the entity, resolved from the
+ * registry rather than declared here — so a form added to the registry cannot
+ * accidentally ship with a weaker check than the endpoint that stores it.
+ * Nothing is written: the values come back for the person to review in the
+ * real form and save themselves.
+ */
+router.post(
+  "/forms/:entity/draft",
+  strictLimiter,
+  validate({
+    params: z.object({ entity: z.string().max(60) }),
+    body: z.object({
+      instruction: z.string().trim().min(3).max(1000),
+      current: z.record(z.unknown()).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) =>
+    ok(res, await formDraft.draft(req.params.entity, req.body, { permissions: req.auth.permissions }))
   )
 );
 

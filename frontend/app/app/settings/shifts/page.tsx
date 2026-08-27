@@ -43,6 +43,7 @@ export default function ShiftsSettingsPage() {
         entityName="Shift"
         can={can}
         permissions={{ view: "shift.view", manage: "shift.manage" }}
+        aiEntity="shift"
         addTour="shift-add"
         formTour="shift-form"
         saveTour="shift-save"

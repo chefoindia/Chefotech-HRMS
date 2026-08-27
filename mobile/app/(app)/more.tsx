@@ -7,6 +7,8 @@ import { useProfile, useUnreadCount } from "../../src/api/hooks";
 import { useColors } from "../../src/theme/ThemeProvider";
 import { Card, Divider, Row, Screen, SectionHeader, Txt } from "../../src/components/ui";
 import { radius, spacing } from "../../src/theme";
+import { versionLabel } from "../../src/brand";
+import { fontStyle } from "../../src/theme/fonts";
 
 /**
  * Everything that does not earn a tab.
@@ -130,7 +132,7 @@ export default function More() {
                     paddingHorizontal: 5,
                   }}
                 >
-                  <Txt variant="caption" style={{ color: "#fff", fontWeight: "700" }}>
+                  <Txt variant="caption" style={[{ color: colors.onBrand }, fontStyle("700")]}>
                     {unread.data > 99 ? "99+" : unread.data}
                   </Txt>
                 </View>
@@ -162,7 +164,7 @@ export default function More() {
         </Card>
 
         <Txt variant="caption" tone="subtle" style={{ textAlign: "center", marginTop: spacing["3xl"] }}>
-          Chefotech HRMS · v1.0.0
+          {versionLabel()}
         </Txt>
       </Screen>
     </SafeAreaView>

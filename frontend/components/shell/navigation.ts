@@ -186,7 +186,10 @@ export const SETTINGS_NAVIGATION: NavItem[] = [
   { label: "Roles & permissions", href: "/app/settings/roles", permission: "role.view" },
   { label: "Employee fields", href: "/app/settings/employee-fields", permission: "employee.manage_custom_fields" },
   { label: "Attendance policies", href: "/app/settings/attendance", permission: "settings.manage_policies" },
-  { label: "Shifts & week off", href: "/app/settings/shifts", permission: "shift.manage" },
+  // Was labelled "Shifts & week off" while no week-off screen existed — the
+  // entity had a backend and a resolver but nothing to reach it with.
+  { label: "Shifts", href: "/app/settings/shifts", permission: "shift.manage" },
+  { label: "Week off patterns", href: "/app/settings/week-off", permission: "shift.manage" },
   { label: "Shift patterns", href: "/app/settings/shift-patterns", permission: "shift.manage" },
   { label: "Holidays", href: "/app/settings/holidays", permission: "holiday.manage" },
   { label: "Leave types", href: "/app/settings/leave-types", permission: "leave.manage_types" },

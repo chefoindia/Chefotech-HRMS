@@ -195,16 +195,24 @@ export function TourEngine() {
 
     // A short delay stops "elementGone" firing before the element has even
     // been rendered for the first time.
+    //
+    // The interval must be created inside the timeout and held where cleanup
+    // can reach it. Returning a cleanup function from a setTimeout callback
+    // does nothing — setTimeout discards the return value — so an interval
+    // started in there survives the step change that should have ended it,
+    // and goes on calling `check` against the step it closed over. Two of
+    // those running at once walked the user through the rest of the tour in a
+    // couple of seconds while they were still reading the first field.
+    let interval: ReturnType<typeof setInterval> | undefined;
+
     const timer = setTimeout(() => {
       check();
-      const interval = setInterval(check, 250);
-      return () => clearInterval(interval);
+      interval = setInterval(check, 250);
     }, 400);
 
-    const interval = setInterval(check, 250);
     return () => {
       clearTimeout(timer);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, [active, step, pathname]);
 

@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { BRAND } from "../brand";
 
 /**
  * The API client.
@@ -230,7 +231,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
           ...(access ? { Authorization: `Bearer ${access}` } : {}),
           // The backend decides web vs mobile capture mode from this, so it
           // must clearly say mobile.
-          "User-Agent": `ChefotechHRMS/1.0 (${Platform.OS})`,
+          "User-Agent": `${BRAND.userAgentProduct}/${BRAND.version} (${Platform.OS})`,
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,

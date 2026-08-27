@@ -16,6 +16,7 @@ import { markIntroSeen } from "../src/auth/session";
 import { useColors } from "../src/theme/ThemeProvider";
 import { Button, Txt } from "../src/components/ui";
 import { radius, spacing } from "../src/theme";
+import { Wordmark } from "../src/components/Wordmark";
 
 /**
  * The intro carousel.
@@ -89,7 +90,18 @@ export default function Intro() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["top", "bottom"]}>
-      <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: spacing.lg }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: spacing.lg,
+        }}
+      >
+        {/* The carousel never named the product on any of its four slides, so
+            a first-run user reached the password field without reading it
+            once. Small, and opposite Skip, so it stays out of the way. */}
+        <Wordmark size="sm" />
         <Pressable
           onPress={finish}
           accessibilityRole="button"

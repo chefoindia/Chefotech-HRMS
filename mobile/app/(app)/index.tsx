@@ -14,6 +14,7 @@ import { Badge, Button, Card, Loading, Screen, SectionHeader, Txt } from "../../
 import { radius, spacing, shadow } from "../../src/theme";
 import { useTheme } from "../../src/theme/ThemeProvider";
 import { TourTarget } from "../../src/help/TourEngine";
+import { fontStyle } from "../../src/theme/fonts";
 
 /**
  * Home.
@@ -130,7 +131,7 @@ export default function Home() {
                   </Txt>
                   <Txt
                     variant="display"
-                    style={[{ color: "#fff", marginTop: 2 }, (require("../../src/theme").type.tabular as object)]}
+                    style={[{ color: colors.onBrand, marginTop: 2 }, (require("../../src/theme").type.tabular as object)]}
                   >
                     {format(now, "HH:mm")}
                   </Txt>
@@ -145,7 +146,7 @@ export default function Home() {
                       borderRadius: radius.full,
                     }}
                   >
-                    <Txt variant="caption" style={{ color: "#fff", fontWeight: "600" }}>
+                    <Txt variant="caption" style={[{ color: colors.onBrand }, fontStyle("600")]}>
                       {isCheckedIn ? "Checked in" : "Not checked in"}
                     </Txt>
                   </View>
@@ -196,7 +197,7 @@ export default function Home() {
                 loading={checkIn.busy}
                 variant="secondary"
                 size="lg"
-                style={{ marginTop: spacing.xl, backgroundColor: "#fff", borderWidth: 0 }}
+                style={{ marginTop: spacing.xl, backgroundColor: colors.onBrand, borderWidth: 0 }}
               />
             </View>
           </Animated.View>

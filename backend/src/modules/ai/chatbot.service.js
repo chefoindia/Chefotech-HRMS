@@ -99,6 +99,73 @@ function toGeminiRole(role) {
   return role === "assistant" ? "model" : "user";
 }
 
+/**
+ * Turn Gemini's function calls into the actions the frontend performs.
+ *
+ * Separated from chat() so it can be tested against the shapes the model
+ * actually returns — a bare object where an array was declared, calls arriving
+ * in an unexpected order, an actionId for a tour the caller may not open —
+ * without needing a live API key to reproduce any of them.
+ */
+function interpretCalls(calls, permissions) {
+  const actions = [];
+
+  /**
+   * Navigation and tours first, prefills second.
+   *
+   * Gemini may emit several function calls in one turn and the order is not
+   * guaranteed, so a single pass that expects start_tour to arrive before its
+   * suggest_field_values silently dropped the values whenever the model
+   * happened to emit them the other way round — the user was then asked to
+   * retype something they had already said in the message that started the
+   * tour. Splitting the passes removes the dependency on an order the API
+   * never promised.
+   */
+  for (const call of calls) {
+    const args = call.args || {};
+
+    if (call.name === "navigate_to") {
+      const action = registry.ACTIONS_BY_ID[args.actionId];
+      if (!action || (action.permission && !permissions.includes(action.permission))) continue;
+      actions.push({ type: "navigate", route: action.route, title: action.title });
+    } else if (call.name === "start_tour") {
+      const action = registry.ACTIONS_BY_ID[args.actionId];
+      if (!action || action.kind !== "tour" || (action.permission && !permissions.includes(action.permission))) continue;
+      actions.push({ type: "start_tour", tourId: action.id, title: action.title, prefill: {} });
+    } else if (call.name !== "suggest_field_values") {
+      logger.warn({ name: call.name }, "Chatbot: unknown function call from Gemini, ignored");
+    }
+  }
+
+  for (const call of calls) {
+    if (call.name !== "suggest_field_values") continue;
+    const args = call.args || {};
+
+    // Only ever the tour this call actually names. The previous fallback to
+    // "whichever tour was started most recently" validated the field names
+    // against one action while writing them into another, so a prefill could
+    // land in a tour whose permission had not been checked for those fields.
+    const target = actions.find((a) => a.type === "start_tour" && a.tourId === args.actionId);
+    if (!target) continue;
+
+    const tourAction = registry.ACTIONS_BY_ID[args.actionId];
+    const knownFields = new Set((tourAction?.fields || []).map((f) => f.field));
+
+    // Gemini returns a bare object instead of a single-element array often
+    // enough to matter, and `for...of` over one throws — which surfaced as a
+    // 500 on a chat message rather than a missing prefill.
+    const values = Array.isArray(args.values) ? args.values : args.values ? [args.values] : [];
+
+    for (const entry of values) {
+      if (entry && entry.field && knownFields.has(entry.field)) {
+        target.prefill[entry.field] = entry.value;
+      }
+    }
+  }
+
+  return actions;
+}
+
 async function chat({ message, history, route }, { permissions }) {
   const onboarding = await organizationService.getOnboarding().catch(() => null);
   const onboardingText = registry.describeOnboardingForPrompt(onboarding);
@@ -107,7 +174,19 @@ async function chat({ message, history, route }, { permissions }) {
 
   const allIds = registry.visibleActions(permissions).map((a) => a.id);
   const tourIds = registry.visibleTourIds(permissions);
-  const functionDeclarations = FUNCTION_DECLARATIONS_TEMPLATE(tourIds, allIds);
+
+  // Gemini rejects a declaration whose enum is empty with a 400, and a caller
+  // holding none of the registry's permissions — a platform user, say —
+  // produces exactly that. Sending it turned an ordinary chat message into an
+  // upstream error that then read on the settings screen as a bad API key.
+  // Dropping the tool instead leaves the assistant able to answer questions,
+  // which is all it could have done for that person anyway.
+  const functionDeclarations = FUNCTION_DECLARATIONS_TEMPLATE(tourIds, allIds).filter(
+    (declaration) =>
+      !Object.values(declaration.parameters.properties).some(
+        (property) => Array.isArray(property.enum) && property.enum.length === 0
+      )
+  );
 
   const trimmedHistory = (history || []).slice(-MAX_HISTORY_TURNS);
   const contents = [
@@ -120,33 +199,7 @@ async function chat({ message, history, route }, { permissions }) {
 
   const result = await ai.run({ contents, systemInstruction, functionDeclarations, temperature: 0.3 });
 
-  const actions = [];
-  let pendingTourAction = null;
-
-  for (const call of result.functionCalls || []) {
-    if (call.name === "navigate_to") {
-      const action = registry.ACTIONS_BY_ID[call.args.actionId];
-      if (!action || (action.permission && !permissions.includes(action.permission))) continue;
-      actions.push({ type: "navigate", route: action.route, title: action.title });
-    } else if (call.name === "start_tour") {
-      const action = registry.ACTIONS_BY_ID[call.args.actionId];
-      if (!action || action.kind !== "tour" || (action.permission && !permissions.includes(action.permission))) continue;
-      pendingTourAction = { type: "start_tour", tourId: action.id, title: action.title, prefill: {} };
-      actions.push(pendingTourAction);
-    } else if (call.name === "suggest_field_values") {
-      const target = actions.find((a) => a.type === "start_tour" && a.tourId === call.args.actionId) || pendingTourAction;
-      if (!target) continue;
-      const tourAction = registry.ACTIONS_BY_ID[call.args.actionId];
-      const knownFields = new Set((tourAction?.fields || []).map((f) => f.field));
-      for (const entry of call.args.values || []) {
-        if (entry && entry.field && knownFields.has(entry.field)) {
-          target.prefill[entry.field] = entry.value;
-        }
-      }
-    } else {
-      logger.warn({ name: call.name }, "Chatbot: unknown function call from Gemini, ignored");
-    }
-  }
+  const actions = interpretCalls(result.functionCalls || [], permissions);
 
   return {
     reply: result.text ? result.text.trim() : actions.length ? "" : "I'm not sure — could you rephrase that?",
@@ -154,4 +207,4 @@ async function chat({ message, history, route }, { permissions }) {
   };
 }
 
-module.exports = { chat };
+module.exports = { chat, interpretCalls };

@@ -12,6 +12,7 @@ import { ToastProvider } from "../src/components/Toast";
 import { AppLockGate } from "../src/auth/AppLockGate";
 import { TourProvider } from "../src/help/TourEngine";
 import { ApiError } from "../src/api/client";
+import { useBrandFonts } from "../src/theme/fonts";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -83,6 +84,13 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
+
+  // Nothing renders until the brand typeface has resolved, one way or the
+  // other. The splash is already being held open above, so this costs no
+  // extra blank frame — whereas rendering first would show a screen of system
+  // font and then reflow every line when Inter arrives.
+  const fontsSettled = useBrandFonts();
+  if (!fontsSettled) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

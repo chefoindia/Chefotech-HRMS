@@ -11,6 +11,7 @@ const { TEMPLATES } = require("../../src/modules/notifications/notificationTempl
 const { ONBOARDING_STEPS } = require("../../src/modules/organizations/onboardingSteps");
 const { LANDING_ROUTES } = require("../../src/modules/auth/auth.service");
 const { ACTIONS } = require("../../src/modules/ai/actionRegistry");
+const { ENTITIES } = require("../../src/core/forms/formRegistry");
 
 /**
  * Deep links are the one place the backend hard-codes knowledge of the
@@ -120,6 +121,12 @@ function collectLinks() {
     if (action.route) links.push({ url: action.route, source: `action registry ${action.id}` });
   }
 
+  // Every form the assistant can fill names the screen it lives on. A wrong
+  // route here sends someone to a 404 holding a draft they cannot save.
+  for (const entity of ENTITIES) {
+    if (entity.route) links.push({ url: entity.route, source: `form registry ${entity.key}` });
+  }
+
   for (const [key, template] of Object.entries(TEMPLATES)) {
     // A wholly dynamic actionUrl is resolved at send time by the module that
     // raises the event; there is no literal route here to verify.
@@ -195,6 +202,7 @@ ${JSON.stringify(broken, null, 2)}`
       path.join("modules", "organizations", "onboardingSteps.js"),
       path.join("modules", "auth", "auth.service.js"),
       path.join("modules", "ai", "actionRegistry.js"),
+      path.join("core", "forms", "formRegistry.js"),
     ];
     const SRC = path.resolve(__dirname, "../../src");
     const unchecked = [];
