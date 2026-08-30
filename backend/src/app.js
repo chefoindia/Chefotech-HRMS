@@ -86,6 +86,31 @@ function createApp() {
   app.use(express.urlencoded({ extended: true, limit: "2mb" }));
   app.use(cookieParser());
 
+  /**
+   * The API root.
+   *
+   * There is no UI here — the frontend is a separate deployment — but hosting
+   * platforms probe `/` to decide whether the service is up, and browsers and
+   * uptime monitors land on it too. Without this route every one of those
+   * probes fell through to the 404 handler, which logs an AppError with a full
+   * stack trace: on Render that is a fresh stack every thirty seconds, and
+   * real errors get buried under it.
+   *
+   * It answers with where to actually go rather than an empty 200, so somebody
+   * who opens the bare URL learns something.
+   */
+  app.get("/", (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        service: "chefotech-hrms-api",
+        status: "ok",
+        docs: `${env.app.apiPrefix}/public/plans`,
+        health: "/health",
+      },
+    });
+  });
+
   // ── Health, before rate limiting so probes are never throttled ────────────
   app.get("/health", (_req, res) => {
     res.json({
