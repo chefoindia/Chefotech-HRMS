@@ -109,7 +109,7 @@ const env = {
   },
 
   storage: {
-    driver: process.env.STORAGE_DRIVER || "drive", // drive | local
+    driver: process.env.STORAGE_DRIVER || "drive", // drive | firebase | local
     localRoot: process.env.STORAGE_LOCAL_ROOT || "./.storage",
     maxUploadBytes: int(process.env.MAX_UPLOAD_BYTES, 25 * 1024 * 1024),
     /**
@@ -118,12 +118,23 @@ const env = {
      * and the customer's own retention rules. Setting this to "drive" or
      * "local" puts everything back in one store.
      */
-    imageDriver: process.env.IMAGE_STORAGE_DRIVER || "cloudinary", // cloudinary | drive | local
+    imageDriver: process.env.IMAGE_STORAGE_DRIVER || "cloudinary", // cloudinary | firebase | drive | local
     drive: {
       serviceAccountKey: process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "",
       rootFolderId: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "",
       // Shared Drives need supportsAllDrives on every call.
       sharedDriveId: process.env.GOOGLE_SHARED_DRIVE_ID || "",
+    },
+    firebase: {
+      // Accepts raw JSON or base64 — a private key with real newlines is
+      // painful to paste into a hosting dashboard's env editor.
+      serviceAccountKey:
+        process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+        process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ||
+        "",
+      // Defaults to <project-id>.appspot.com, derived from the service account.
+      bucket: process.env.FIREBASE_STORAGE_BUCKET || "",
+      folder: process.env.FIREBASE_STORAGE_FOLDER || "chefotech-hrms",
     },
     cloudinary: {
       cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
@@ -142,6 +153,18 @@ const env = {
 
   mail: {
     enabled: bool(process.env.MAIL_ENABLED, false),
+    /**
+     * Which transport actually sends.
+     *
+     * Defaults to Brevo whenever an API key is present, because a deployment
+     * that has one almost certainly means to use it — and an HTTP API works
+     * from hosts that block outbound SMTP ports, which most managed platforms
+     * now do.
+     */
+    driver: process.env.MAIL_DRIVER || (process.env.BREVO_API_KEY ? "brevo" : "smtp"),
+    brevo: {
+      apiKey: process.env.BREVO_API_KEY || "",
+    },
     host: process.env.SMTP_HOST || "",
     port: int(process.env.SMTP_PORT, 587),
     secure: bool(process.env.SMTP_SECURE, false),

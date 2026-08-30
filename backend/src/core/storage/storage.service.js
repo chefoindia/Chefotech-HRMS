@@ -5,6 +5,7 @@ const path = require("node:path");
 const StoredFile = require("./storedFile.model");
 const driveProvider = require("./drive.provider");
 const cloudinaryProvider = require("./cloudinary.provider");
+const firebaseProvider = require("./firebase.provider");
 const localProvider = require("./local.provider");
 const { env } = require("../../config/env");
 const { AppError } = require("../errors/AppError");
@@ -16,7 +17,12 @@ const tenant = require("../tenancy/tenantContext");
  * whether the bytes ended up in Drive or on disk.
  */
 
-const PROVIDERS = { drive: driveProvider, local: localProvider, cloudinary: cloudinaryProvider };
+const PROVIDERS = {
+  drive: driveProvider,
+  local: localProvider,
+  cloudinary: cloudinaryProvider,
+  firebase: firebaseProvider,
+};
 
 function provider(name) {
   const p = PROVIDERS[name || env.storage.driver];

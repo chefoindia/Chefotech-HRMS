@@ -15,6 +15,10 @@ const { objectId, listQuery } = require("../../core/validation/common");
 const { ok, paged } = require("../../core/http/response");
 const tenant = require("../../core/tenancy/tenantContext");
 const audit = require("../../core/audit/audit.service");
+const NotificationRule = require("./notificationRule.model");
+const notificationTemplates = require("./notificationTemplates");
+const defaultRules = require("./defaultRules");
+const { AppError } = require("../../core/errors/AppError");
 
 const router = express.Router();
 router.use(authenticate());
@@ -180,6 +184,173 @@ router.post(
     );
 
     return ok(res, { ...result, recipients: employees.length });
+  })
+);
+
+
+// ── Notification rules: "when this happens, tell these people" ──────────────
+
+/**
+ * Gated on notification.manage_templates, the same permission that governs
+ * changing what a message says. Deciding who receives payroll and leave
+ * notifications is at least as sensitive as wording them, and a rule pointed
+ * at an external address is a route for data to leave the tenant — so this is
+ * not something a general settings permission should unlock.
+ */
+
+const RecipientSchema = z
+  .object({
+    type: z.enum(NotificationRule.RECIPIENT_TYPES),
+    roleIds: z.array(objectId()).optional(),
+    userIds: z.array(objectId()).optional(),
+    employeeIds: z.array(objectId()).optional(),
+    email: z.string().email().optional(),
+  })
+  .refine((value) => value.type !== "email" || Boolean(value.email), {
+    message: "An external recipient needs an email address",
+  })
+  .refine((value) => value.type !== "role" || (value.roleIds || []).length > 0, {
+    message: "Choose at least one role",
+  });
+
+const RuleSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().max(300).optional(),
+  event: z.string().trim().min(1).max(80),
+  templateKey: z.string().max(80).nullable().optional(),
+  condition: z.string().max(500).nullable().optional(),
+  recipients: z.array(RecipientSchema).min(1, "A rule needs at least one recipient"),
+  channels: z.array(z.enum(["in_app", "email", "push"])).nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
+/** The events a rule can be bound to, so the UI never offers a dead one. */
+router.get(
+  "/rules/events",
+  requirePermission("notification.manage_templates"),
+  asyncHandler(async (_req, res) => {
+    const seen = new Map();
+    for (const [key, template] of Object.entries(notificationTemplates.TEMPLATES)) {
+      if (!seen.has(template.event)) {
+        seen.set(template.event, {
+          event: template.event,
+          templateKey: key,
+          title: template.title || key,
+          channels: template.channels || [],
+        });
+      }
+    }
+    return ok(res, [...seen.values()]);
+  })
+);
+
+router.get(
+  "/rules",
+  requirePermission("notification.manage_templates"),
+  asyncHandler(async (_req, res) =>
+    ok(res, await NotificationRule.find({}).sort({ event: 1, name: 1 }).lean())
+  )
+);
+
+router.post(
+  "/rules",
+  requirePermission("notification.manage_templates"),
+  validate({ body: RuleSchema }),
+  asyncHandler(async (req, res) => {
+    const rule = await NotificationRule.create(req.body);
+    await audit.record(
+      {
+        action: "notification.rule_created",
+        entityType: "NotificationRule",
+        entityId: rule._id,
+        entityLabel: rule.name,
+        after: { event: rule.event, recipients: rule.recipients.length },
+        severity: "notice",
+      },
+      req
+    );
+    return ok(res, rule.toObject());
+  })
+);
+
+router.patch(
+  "/rules/:id",
+  requirePermission("notification.manage_templates"),
+  validate({ params: z.object({ id: objectId() }), body: RuleSchema.partial() }),
+  asyncHandler(async (req, res) => {
+    const rule = await NotificationRule.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!rule) throw AppError.notFound("Notification rule");
+
+    await audit.record(
+      {
+        action: "notification.rule_updated",
+        entityType: "NotificationRule",
+        entityId: rule._id,
+        entityLabel: rule.name,
+        after: { event: rule.event, isActive: rule.isActive },
+        severity: "notice",
+      },
+      req
+    );
+    return ok(res, rule.toObject());
+  })
+);
+
+router.delete(
+  "/rules/:id",
+  requirePermission("notification.manage_templates"),
+  validate({ params: z.object({ id: objectId() }) }),
+  asyncHandler(async (req, res) => {
+    const rule = await NotificationRule.findByIdAndDelete(req.params.id);
+    if (!rule) throw AppError.notFound("Notification rule");
+
+    await audit.record(
+      {
+        action: "notification.rule_deleted",
+        entityType: "NotificationRule",
+        entityId: rule._id,
+        entityLabel: rule.name,
+        before: { event: rule.event },
+        severity: "warning",
+      },
+      req
+    );
+    return ok(res, { deleted: true });
+  })
+);
+
+/**
+ * Seed the defaults.
+ *
+ * Never overwrites: a rule the customer already has for an event is left
+ * exactly as they wrote it, and only genuinely absent defaults are added. That
+ * makes this safe to call more than once, which matters because it is
+ * reachable from a button.
+ */
+router.post(
+  "/rules/seed-defaults",
+  requirePermission("notification.manage_templates"),
+  asyncHandler(async (req, res) => {
+    const Role = require("../rbac/role.model");
+    const { rules, skipped } = await defaultRules.materialise(Role);
+
+    const existing = await NotificationRule.find({}).select("event name").lean();
+    const taken = new Set(existing.map((r) => `${r.event}::${r.name}`));
+
+    const toCreate = rules.filter((rule) => !taken.has(`${rule.event}::${rule.name}`));
+    const created = toCreate.length ? await NotificationRule.insertMany(toCreate) : [];
+
+    await audit.record(
+      {
+        action: "notification.rules_seeded",
+        entityType: "NotificationRule",
+        after: { created: created.length, skipped: skipped.length },
+        severity: "notice",
+      },
+      req
+    );
+
+    return ok(res, { created: created.length, skipped, alreadyPresent: rules.length - toCreate.length });
   })
 );
 

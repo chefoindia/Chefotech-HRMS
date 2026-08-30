@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const Notification = require("./notification.model");
 const EmailTemplate = require("./emailTemplate.model");
 const templates = require("./notificationTemplates");
+const ruleService = require("./notificationRule.service");
 const mailer = require("./mailer");
 const settings = require("../../core/settings/settings.service");
 const tenant = require("../../core/tenancy/tenantContext");
@@ -85,17 +86,36 @@ async function notify({
   const template = await resolveTemplate(templateKey);
   if (!template) return { sent: 0, skipped: recipients.length };
 
+  /**
+   * The tenant's own rules, applied on top of whoever the caller named.
+   *
+   * Strictly additive: `mergeRecipients` puts the caller's list first and
+   * dedupes, so a rule can copy the plant manager on every rejection but can
+   * never stop the employee hearing about their own. This sits inside notify()
+   * rather than at each call site so every event already in the product gains
+   * rule support without five modules having to remember to ask.
+   */
+  const rules = await ruleService.extraRecipientsFor(template.event, {
+    subject: recipients[0] || null,
+    actor: data.actor || null,
+    data,
+  });
+
+  const audience = ruleService.mergeRecipients(recipients, rules.recipients);
+
   const enabled = await settings
     .get("notification.channels_enabled")
     .catch(() => ["in_app", "email"]);
 
-  const channels = (channelOverride || template.channels).filter((c) => enabled.includes(c));
-  if (!channels.length) return { sent: 0, skipped: recipients.length };
+  const channels = (channelOverride || rules.channels || template.channels).filter((c) =>
+    enabled.includes(c)
+  );
+  if (!channels.length) return { sent: 0, skipped: audience.length };
 
   const category = CATEGORY_BY_PREFIX[String(template.event).split(".")[0]] || "system";
   let sent = 0;
 
-  for (const recipient of recipients) {
+  for (const recipient of audience) {
     const payload = {
       ...data,
       recipient,

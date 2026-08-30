@@ -46,6 +46,7 @@ const ErrorCodes = {
   NOT_AN_APPROVER: { status: 403, message: "You are not an approver for this request." },
   FORMULA_ERROR: { status: 422, message: "A configured formula could not be evaluated." },
   STORAGE_ERROR: { status: 502, message: "The file store could not be reached." },
+  MAIL_ERROR: { status: 502, message: "The email could not be sent." },
   DEVICE_UNREACHABLE: { status: 502, message: "The biometric device could not be reached." },
   IMPORT_FAILED: { status: 422, message: "The import could not be completed." },
 

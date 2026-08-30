@@ -3,15 +3,24 @@
 const nodemailer = require("nodemailer");
 const { env } = require("../../config/env");
 const { logger } = require("../../config/logger");
+const { AppError } = require("../../core/errors/AppError");
 
 /**
- * SMTP transport.
+ * Outbound mail, over Brevo's HTTP API or SMTP.
+ *
+ * Two transports, chosen by `MAIL_DRIVER` and defaulting to Brevo whenever an
+ * API key is set. The HTTP API is the one that works in practice on managed
+ * hosts: Render, Fly and most container platforms block outbound port 587, so
+ * an SMTP-only mailer fails there in a way that looks like a hang rather than
+ * a misconfiguration.
  *
  * When mail is disabled (the default in development and tests) messages are
  * logged instead of sent, and the send still "succeeds" — a developer running
- * the platform without SMTP credentials should be able to complete a password
- * reset flow by reading the log, not hit a 500.
+ * the platform without credentials should be able to complete a password reset
+ * flow by reading the log, not hit a 500.
  */
+
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
 let transport = null;
 const outbox = []; // dev/test only, capped
@@ -66,6 +75,76 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Split "Name <a@b.com>" into the pair Brevo's API wants.
+ *
+ * MAIL_FROM is conventionally written in that combined form, and Brevo
+ * rejects the whole request if `sender.email` is not a bare address.
+ */
+function parseAddress(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (match) return { name: match[1].replace(/^"|"$/g, "") || undefined, email: match[2].trim() };
+  return { email: raw };
+}
+
+/** Brevo takes a list of recipients; callers pass one address or several. */
+function recipientList(to) {
+  const values = Array.isArray(to) ? to : String(to || "").split(",");
+  return values
+    .map((value) => parseAddress(value))
+    .filter((entry) => entry.email);
+}
+
+async function sendViaBrevo({ to, subject, text, html, replyTo }) {
+  const apiKey = env.mail.brevo.apiKey;
+  if (!apiKey) {
+    throw new AppError("MAIL_ERROR", {
+      message: "Email is not configured. Set BREVO_API_KEY, or set MAIL_DRIVER=smtp.",
+    });
+  }
+
+  const payload = {
+    sender: parseAddress(env.mail.from),
+    to: recipientList(to),
+    subject,
+    htmlContent: html || undefined,
+    textContent: text || undefined,
+  };
+  if (replyTo) payload.replyTo = parseAddress(replyTo);
+
+  const response = await fetch(BREVO_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    // The API key is in scope here; log the reason, never the credential.
+    logger.error(
+      { status: response.status, reason: body?.message, code: body?.code },
+      "Brevo rejected the message"
+    );
+    throw new AppError("MAIL_ERROR", {
+      message: body?.message || "The email could not be sent.",
+    });
+  }
+
+  return { delivered: true, messageId: body.messageId || null };
+}
+
+async function sendViaSmtp(message) {
+  const tx = getTransport();
+  const info = await tx.sendMail(message);
+  return { delivered: true, messageId: info.messageId };
+}
+
 async function send({ to, subject, text, html, replyTo }) {
   const message = {
     from: env.mail.from,
@@ -76,17 +155,21 @@ async function send({ to, subject, text, html, replyTo }) {
     replyTo,
   };
 
-  const tx = getTransport();
-  if (!tx) {
+  if (!env.mail.enabled) {
     outbox.push({ ...message, at: new Date() });
     if (outbox.length > 100) outbox.shift();
     logger.info({ to, subject }, "Email not sent (mail disabled); captured in the dev outbox");
     return { delivered: false, simulated: true };
   }
 
-  const info = await tx.sendMail(message);
-  logger.info({ to, subject, messageId: info.messageId }, "Email sent");
-  return { delivered: true, messageId: info.messageId };
+  const result =
+    env.mail.driver === "brevo" ? await sendViaBrevo(message) : await sendViaSmtp(message);
+
+  logger.info(
+    { to, subject, messageId: result.messageId, driver: env.mail.driver },
+    "Email sent"
+  );
+  return result;
 }
 
 /** Dev affordance: read what would have been sent. */
@@ -95,14 +178,31 @@ function devOutbox() {
 }
 
 async function verify() {
+  if (!env.mail.enabled) return { ok: true, simulated: true };
+
+  if (env.mail.driver === "brevo") {
+    if (!env.mail.brevo.apiKey) return { ok: false, reason: "BREVO_API_KEY is not set" };
+    try {
+      // The account endpoint is the cheapest call that proves the key works.
+      const response = await fetch("https://api.brevo.com/v3/account", {
+        headers: { "api-key": env.mail.brevo.apiKey, Accept: "application/json" },
+      });
+      if (response.ok) return { ok: true, driver: "brevo" };
+      const body = await response.json().catch(() => ({}));
+      return { ok: false, reason: body?.message || `HTTP ${response.status}` };
+    } catch (err) {
+      return { ok: false, reason: err.message };
+    }
+  }
+
   const tx = getTransport();
   if (!tx) return { ok: true, simulated: true };
   try {
     await tx.verify();
-    return { ok: true };
+    return { ok: true, driver: "smtp" };
   } catch (err) {
     return { ok: false, reason: err.message };
   }
 }
 
-module.exports = { send, wrapHtml, devOutbox, verify, escapeHtml };
+module.exports = { send, wrapHtml, devOutbox, verify, escapeHtml, parseAddress, recipientList };
