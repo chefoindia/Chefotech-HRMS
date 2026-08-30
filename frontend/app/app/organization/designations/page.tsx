@@ -21,6 +21,7 @@ export default function DesignationsPage() {
       resource="/designations"
       queryKey="designations"
       entityName="Designation"
+      aiEntity="designation"
       can={can}
       permissions={{ view: "designation.view", manage: "designation.manage" }}
       emptyIcon={<BadgeCheck className="h-6 w-6" />}

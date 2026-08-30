@@ -13,64 +13,10 @@ const { objectId, objectIdParam, dateString, listQuery } = require("../../core/v
 const { ok, created, paged } = require("../../core/http/response");
 const formula = require("../../core/rules/formula");
 
-const StepSchema = z.object({
-  order: z.number().int().min(1).max(20),
-  name: z.string().trim().min(1).max(60),
-  approverType: z.enum([
-    "reporting_manager",
-    "manager_level",
-    "department_head",
-    "role",
-    "permission",
-    "specific_users",
-    "requester",
-  ]),
-  managerLevel: z.number().int().min(1).max(10).optional(),
-  roleIds: z.array(objectId()).optional(),
-  permission: z.string().max(60).nullable().optional(),
-  userIds: z.array(objectId()).optional(),
-  mode: z.enum(["any", "all"]).optional(),
-  condition: z
-    .string()
-    .max(500)
-    .nullable()
-    .optional()
-    .refine(
-      (v) => !v || formula.validateExpression(v).valid !== false || true,
-      "Condition could not be parsed"
-    ),
-  autoApproveAfterDays: z.number().int().min(0).max(365).optional(),
-  escalateAfterDays: z.number().int().min(0).max(365).optional(),
-  canReject: z.boolean().optional(),
-  skipIfSelf: z.boolean().optional(),
-});
-
-const WorkflowSchema = z.object({
-  name: z.string().trim().min(1).max(60),
-  code: z.string().trim().min(1).max(20),
-  description: z.string().max(300).optional(),
-  entityType: z.enum([
-    "leave_request",
-    "attendance_correction",
-    "expense_claim",
-    "employee_onboarding",
-    "salary_revision",
-    "document_approval",
-    "overtime",
-    "asset_request",
-  ]),
-  steps: z.array(StepSchema).min(1, "Add at least one approval step").max(20),
-  appliesTo: z
-    .object({
-      departmentIds: z.array(objectId()).optional(),
-      locationIds: z.array(objectId()).optional(),
-      employmentTypes: z.array(z.string()).optional(),
-    })
-    .optional(),
-  isDefault: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-  priority: z.number().int().min(1).max(1000).optional(),
-});
+const {
+  StepSchema,
+  WorkflowSchema,
+} = require("./workflow.schema");
 
 const workflowService = createCrudService({
   model: Workflow,

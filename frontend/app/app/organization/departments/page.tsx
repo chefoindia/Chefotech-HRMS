@@ -21,6 +21,7 @@ export default function DepartmentsPage() {
       resource="/departments"
       queryKey="departments"
       entityName="Department"
+      aiEntity="department"
       can={can}
       permissions={{ view: "department.view", manage: "department.manage" }}
       emptyIcon={<Building2 className="h-6 w-6" />}

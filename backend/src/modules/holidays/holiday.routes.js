@@ -12,28 +12,10 @@ const { objectId, objectIdParam, dateString } = require("../../core/validation/c
 const { ok, created } = require("../../core/http/response");
 const { AppError } = require("../../core/errors/AppError");
 
-const CalendarSchema = z.object({
-  name: z.string().trim().min(1).max(60),
-  code: z.string().trim().min(1).max(20),
-  year: z.number().int().min(2000).max(2100),
-  description: z.string().max(300).optional(),
-  locationIds: z.array(objectId()).optional(),
-  optionalHolidayQuota: z.number().int().min(0).max(20).optional(),
-  isDefault: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-});
-
-const HolidaySchema = z.object({
-  calendarId: objectId(),
-  name: z.string().trim().min(1).max(80),
-  date: dateString(),
-  type: z.enum(["public", "national", "regional", "company", "optional", "restricted"]).optional(),
-  description: z.string().max(300).optional(),
-  isHalfDay: z.enum(["", "first", "second"]).optional(),
-  isOptional: z.boolean().optional(),
-  isPaid: z.boolean().optional(),
-  colour: z.string().max(9).optional(),
-});
+const {
+  CalendarSchema,
+  HolidaySchema,
+} = require("./holiday.schema");
 
 const router = express.Router();
 router.use(authenticate());

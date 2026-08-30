@@ -77,6 +77,14 @@ function readChecks(def) {
   for (const check of def.checks || []) {
     if (check.kind === "min") out.min = check.value;
     else if (check.kind === "max") out.max = check.value;
+    // `.length(n)` on an array is a fixed size, not a bound — WeeklyOffSchema
+    // uses it to demand all seven days. Reporting it as both ends lets a
+    // caller build a record the schema will actually accept.
+    else if (check.kind === "length") {
+      out.min = check.value;
+      out.max = check.value;
+      out.exact = check.value;
+    }
     else if (check.kind === "int") out.integer = true;
     else if (check.kind === "email") out.email = true;
     else if (check.kind === "regex") out.pattern = String(check.regex);
@@ -88,7 +96,7 @@ function readChecks(def) {
  * The field's type as the UI and the AI need to understand it, which is a
  * more specific question than "what Zod class is this".
  */
-function classify(inner, checks) {
+function classify(inner, checks, fieldName) {
   const name = inner._def.typeName;
 
   if (name === "ZodString") {
@@ -96,9 +104,20 @@ function classify(inner, checks) {
     if (checks.pattern === TIME_PATTERN) return "time";
     if (checks.pattern === DATE_PATTERN) return "date";
     if (checks.pattern === COLOUR_PATTERN) return "colour";
-    // An unconstrained string behind a .refine() is, in this codebase, always
-    // objectId() — a pointer at another record rather than free text.
-    if (!checks.pattern && checks.min === undefined && checks.max === undefined) return "reference";
+
+    // A pointer at another record, which must never be offered to the model.
+    //
+    // Shape alone cannot decide this. objectId() is `z.string().refine(...)`
+    // with no other constraint — but so is the timezone field, and so is any
+    // bare `z.string()`. Going by shape classified `location.timezone`, a
+    // table column's `label`, and a custom field's `options.value` as record
+    // ids, which silently withheld them from both the assistant and the help
+    // system. The naming convention is the reliable signal: every genuine
+    // reference in this codebase ends in Id or Ids.
+    const looksLikeId = typeof fieldName === "string" && /Ids?$/.test(fieldName);
+    if (looksLikeId && !checks.pattern && checks.min === undefined && checks.max === undefined) {
+      return "reference";
+    }
     return "string";
   }
 
@@ -121,7 +140,7 @@ function describeField(name, type, depth) {
   if (!inner || !inner._def) return { name, type: "unknown", required: false, nullable: false };
 
   const checks = readChecks(inner._def);
-  const kind = classify(inner, checks);
+  const kind = classify(inner, checks, name);
 
   const field = {
     name,
@@ -143,6 +162,22 @@ function describeField(name, type, depth) {
     if (kind === "object") {
       field.fields = introspect(inner, depth + 1);
     } else if (kind === "array") {
+      // An array keeps its size on _def rather than in `checks`, so the
+      // string/number path above never sees it. WeeklyOffSchema demands
+      // exactly seven days this way, and a caller building a record it will
+      // accept has to be told that.
+      const exact = inner._def.exactLength;
+      const atLeast = inner._def.minLength;
+      const atMost = inner._def.maxLength;
+      if (exact) {
+        field.min = exact.value;
+        field.max = exact.value;
+        field.exact = exact.value;
+      } else {
+        if (atLeast) field.min = atLeast.value;
+        if (atMost) field.max = atMost.value;
+      }
+
       const { inner: element } = unwrap(inner._def.type);
       if (element && element._def) {
         if (element._def.typeName === "ZodObject") {
@@ -150,7 +185,7 @@ function describeField(name, type, depth) {
           field.itemFields = introspect(element, depth + 1);
         } else {
           const elementChecks = readChecks(element._def);
-          field.itemType = classify(element, elementChecks);
+          field.itemType = classify(element, elementChecks, name);
           if (field.itemType === "enum") field.options = element._def.values ? [...element._def.values] : [];
         }
       }

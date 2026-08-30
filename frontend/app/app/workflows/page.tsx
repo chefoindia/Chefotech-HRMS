@@ -5,6 +5,11 @@ import { useSession } from "@/lib/session";
 import { humanise } from "@/lib/format";
 import { Badge, Callout, NoAccessState, UpgradeState } from "@/components/ui";
 import { MasterDataPage } from "@/components/data/MasterDataPage";
+import {
+  WorkflowStepsEditor,
+  emptyStep,
+  normaliseSteps,
+} from "@/components/workflow/WorkflowStepsEditor";
 
 interface Workflow {
   id: string;
@@ -48,6 +53,7 @@ export default function WorkflowsPage() {
         resource="/workflows"
         queryKey="workflows"
         entityName="Workflow"
+        aiEntity="workflow"
         can={can}
         permissions={{ view: "workflow.view", manage: "workflow.manage" }}
         emptyIcon={<GitBranch className="h-6 w-6" />}
@@ -122,22 +128,27 @@ export default function WorkflowsPage() {
             hint: "Lower wins when more than one workflow could apply.",
           },
           { path: "description", label: "Description", type: "textarea" },
+          {
+            path: "steps",
+            label: "Approval steps",
+            // The chain is the whole substance of a workflow. It was
+            // previously fixed at one hardcoded manager step because the form
+            // never collected it.
+            render: ({ value, onChange }) => (
+              <WorkflowStepsEditor value={value} onChange={(steps) => onChange(steps)} />
+            ),
+          },
         ]}
         defaults={{
           entityType: "leave_request",
           priority: 100,
           isActive: true,
-          steps: [
-            {
-              order: 1,
-              name: "Manager approval",
-              approverType: "reporting_manager",
-              mode: "any",
-              canReject: true,
-              skipIfSelf: true,
-            },
-          ],
+          steps: [emptyStep(1)],
         }}
+        // Steps must reach the API ordered from 1 with no gaps. The editor
+        // keeps them that way, but a workflow saved straight from the
+        // defaults never passes through it.
+        beforeSave={(values) => ({ ...values, steps: normaliseSteps(values.steps) })}
       />
     </>
   );

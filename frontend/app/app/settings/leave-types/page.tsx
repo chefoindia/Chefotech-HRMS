@@ -35,6 +35,7 @@ export default function LeaveTypesSettingsPage() {
         resource="/leave/types"
         queryKey="leave-types"
         entityName="Leave type"
+        aiEntity="leave_type"
         can={can}
         permissions={{ view: "leave.view", manage: "leave.manage_types" }}
         emptyIcon={<CalendarDays className="h-6 w-6" />}

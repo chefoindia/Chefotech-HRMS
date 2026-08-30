@@ -11,13 +11,9 @@ const { objectIdParam } = require("../../core/validation/common");
 const { ok, created } = require("../../core/http/response");
 const { PERMISSION_GROUPS, ALL_PERMISSIONS } = require("../../core/rbac/permissions");
 
-const RoleSchema = z.object({
-  name: z.string().trim().min(2).max(60),
-  key: z.string().trim().max(40).optional(),
-  description: z.string().max(300).optional(),
-  permissions: z.array(z.string().max(60)).max(ALL_PERMISSIONS.length + 40),
-  rank: z.number().int().min(1).max(100).optional(),
-});
+const {
+  RoleSchema,
+} = require("./rbac.schema");
 
 const router = express.Router();
 router.use(authenticate());

@@ -47,6 +47,7 @@ export default function EmployeeFieldsPage() {
         resource="/employees/custom-fields"
         queryKey="custom-fields"
         entityName="Field"
+        aiEntity="employee_field"
         can={can}
         permissions={{ view: "employee.view", manage: "employee.manage_custom_fields" }}
         emptyIcon={<SlidersHorizontal className="h-6 w-6" />}

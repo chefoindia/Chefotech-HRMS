@@ -12,16 +12,10 @@ const { objectId, objectIdParam, listQuery } = require("../../core/validation/co
 const { AppError } = require("../../core/errors/AppError");
 const organizationService = require("../organizations/organization.service");
 
-const CreateSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  code: z.string().trim().min(1).max(20),
-  description: z.string().max(500).optional(),
-  grade: z.string().max(20).optional(),
-  level: z.number().int().min(1).max(20).optional(),
-  departmentId: objectId().nullable().optional(),
-  isActive: z.boolean().optional(),
-});
-const UpdateSchema = CreateSchema.partial();
+const {
+  CreateSchema,
+  UpdateSchema,
+} = require("./designation.schema");
 
 const service = createCrudService({
   model: Designation,

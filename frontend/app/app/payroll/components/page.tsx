@@ -97,6 +97,7 @@ export default function SalaryComponentsPage() {
         resource="/payroll/components"
         queryKey="salary-components"
         entityName="Component"
+        aiEntity="payroll_component"
         can={can}
         permissions={{ view: "payroll.view", manage: "payroll.manage_components" }}
         emptyIcon={<Calculator className="h-6 w-6" />}

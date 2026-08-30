@@ -13,16 +13,10 @@ const { AppError } = require("../../core/errors/AppError");
 const { ok } = require("../../core/http/response");
 const organizationService = require("../organizations/organization.service");
 
-const CreateSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  code: z.string().trim().min(1).max(20),
-  description: z.string().max(500).optional(),
-  parentId: objectId().nullable().optional(),
-  headEmployeeId: objectId().nullable().optional(),
-  costCentre: z.string().max(40).optional(),
-  isActive: z.boolean().optional(),
-});
-const UpdateSchema = CreateSchema.partial();
+const {
+  CreateSchema,
+  UpdateSchema,
+} = require("./department.schema");
 
 /** Recompute the ancestor path, refusing to create a cycle. */
 async function resolveHierarchy(parentId, selfId) {

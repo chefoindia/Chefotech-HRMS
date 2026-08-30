@@ -19,6 +19,7 @@ export default function LocationsPage() {
       resource="/locations"
       queryKey="locations"
       entityName="Location"
+      aiEntity="location"
       can={can}
       permissions={{ view: "location.view", manage: "location.manage" }}
       emptyIcon={<MapPin className="h-6 w-6" />}
