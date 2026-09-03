@@ -19,6 +19,8 @@ const NotificationRule = require("./notificationRule.model");
 const notificationTemplates = require("./notificationTemplates");
 const defaultRules = require("./defaultRules");
 const { AppError } = require("../../core/errors/AppError");
+const mailer = require("./mailer");
+const { env } = require("../../config/env");
 
 const router = express.Router();
 router.use(authenticate());
@@ -351,6 +353,36 @@ router.post(
     );
 
     return ok(res, { created: created.length, skipped, alreadyPresent: rules.length - toCreate.length });
+  })
+);
+
+
+/**
+ * Is mail actually going to work?
+ *
+ * Added because there was no way to answer that question from outside the
+ * source. Mail can fail for three unrelated reasons that all look identical
+ * from a user's seat — "I never got the email" — and each needs a different
+ * fix: the switch is off, the credential is rejected, or the sender address
+ * is not verified with the provider. This reports which.
+ */
+router.get(
+  "/mail/health",
+  requirePermission("notification.manage_templates"),
+  asyncHandler(async (_req, res) => {
+    const verify = env.mail.enabled
+      ? await mailer.verify()
+      : { ok: false, reason: "MAIL_ENABLED is not true — no mail will be sent" };
+
+    return ok(res, {
+      enabled: env.mail.enabled,
+      driver: env.mail.driver,
+      from: env.mail.from,
+      brevoKeySet: Boolean(env.mail.brevo.apiKey),
+      smtpHostSet: Boolean(env.mail.host),
+      reachable: verify.ok,
+      reason: verify.reason || null,
+    });
   })
 );
 

@@ -36,7 +36,18 @@ function list(value, fallback = []) {
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 const isProd = NODE_ENV === "production";
-const isTest = NODE_ENV === "test";
+
+/**
+ * `node --test` does not set NODE_ENV, and the npm script does not either —
+ * so `isTest` was false for the entire test suite and everything keyed off it
+ * silently behaved as though it were an ordinary development run: bcrypt did
+ * 12 rounds instead of 4 on every fixture user, and the background job queue
+ * started up and processed work in the middle of tests.
+ *
+ * NODE_TEST_CONTEXT is set by the runner itself, needs no cross-platform
+ * shell shenanigans in the npm script, and cannot be forgotten.
+ */
+const isTest = NODE_ENV === "test" || Boolean(process.env.NODE_TEST_CONTEXT);
 
 const env = {
   NODE_ENV,
@@ -152,7 +163,15 @@ const env = {
   },
 
   mail: {
-    enabled: bool(process.env.MAIL_ENABLED, false),
+    // Never enabled under `npm test`, whatever the environment says.
+    //
+    // The test suite exercises password resets, invitations and notification
+    // fan-out. On a developer machine that has MAIL_ENABLED=true and a real
+    // provider key in .env — which is exactly how you would configure it to
+    // check mail actually works — running the suite would put real messages
+    // in real inboxes, addressed to whatever fixture data happened to be
+    // used. Tests get the in-memory outbox, always.
+    enabled: !isTest && bool(process.env.MAIL_ENABLED, false),
     /**
      * Which transport actually sends.
      *

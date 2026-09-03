@@ -9,6 +9,7 @@ const queue = require("./core/jobs/queue");
 const registerJobs = require("./jobs");
 const realtime = require("./core/realtime/realtime");
 const schedules = require("./jobs/schedules");
+const mailer = require("./modules/notifications/mailer");
 
 async function start() {
   assertProductionConfig();
@@ -29,6 +30,35 @@ async function start() {
     { port: env.app.port, env: env.NODE_ENV, prefix: env.app.apiPrefix },
     `Chefotech HRMS API listening on http://localhost:${env.app.port}`
   );
+
+  // Mail state, stated once at boot.
+  //
+  // Every outbound message in this product — password resets, invitations,
+  // payslip notices, leave decisions — goes through one switch, and until now
+  // that switch being off was invisible until somebody complained they never
+  // got an email. Saying it here means the answer is in the first ten lines
+  // of the deploy log instead of in a support thread.
+  if (!env.mail.enabled) {
+    logger.warn(
+      { driver: env.mail.driver },
+      "MAIL IS OFF (MAIL_ENABLED is not true) — no email will be sent from this server"
+    );
+  } else {
+    logger.info(
+      { driver: env.mail.driver, from: env.mail.from },
+      "Mail enabled"
+    );
+    // Proves the credential and the sender actually work, rather than waiting
+    // for the first real send to find out. Never throws: a mail provider being
+    // unreachable is not a reason to refuse to boot the whole API.
+    mailer
+      .verify()
+      .then((result) => {
+        if (result.ok) logger.info({ driver: env.mail.driver }, "Mail provider reachable");
+        else logger.error({ driver: env.mail.driver, reason: result.reason }, "MAIL PROVIDER REJECTED US — email will fail");
+      })
+      .catch((err) => logger.error({ err: err.message }, "Mail provider check failed"));
+  }
 
   const shutdown = async (signal) => {
     logger.info({ signal }, "Shutting down");

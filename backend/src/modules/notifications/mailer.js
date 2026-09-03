@@ -156,6 +156,32 @@ async function send({ to, subject, text, html, replyTo }) {
   };
 
   if (!env.mail.enabled) {
+    // In development the outbox is the point: a developer without SMTP or a
+    // Brevo key can still walk through a password reset by reading the log.
+    //
+    // In PRODUCTION it is a trap, and it is the bug this whole area had.
+    // Nothing anywhere checks the `delivered` / `simulated` flags — grep the
+    // modules, there is not one caller — so a swallowed send reads as a
+    // complete success all the way back up: the reset token is issued, the
+    // audit log records that the mail went out, and the person is told to
+    // check their inbox for something that was never sent. MAIL_ENABLED
+    // simply being absent (it defaults to false) is enough to do that to
+    // every password reset, invitation and payslip notice in the system,
+    // and it does it silently, at info level.
+    //
+    // Refusing loudly is the honest failure: the request 502s, the caller
+    // sees a real error, and the cause names itself.
+    if (env.isProd) {
+      logger.error(
+        { to, subject },
+        "Refusing to silently drop an email in production — MAIL_ENABLED is not on"
+      );
+      throw new AppError("MAIL_ERROR", {
+        message:
+          "Email is switched off on this server, so nothing was sent. Set MAIL_ENABLED=true and configure a mail provider.",
+      });
+    }
+
     outbox.push({ ...message, at: new Date() });
     if (outbox.length > 100) outbox.shift();
     logger.info({ to, subject }, "Email not sent (mail disabled); captured in the dev outbox");
