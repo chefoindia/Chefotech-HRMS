@@ -118,6 +118,14 @@ export default function MyPayslipsPage() {
                 <Button variant="outline" size="sm" onClick={() => open(payslip)}>
                   View
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<Download className="h-3.5 w-3.5" />}
+                  onClick={() => api.download(`/payroll/payslips/${payslip.id}/pdf`, undefined, `payslip-${payslip.periodLabel.replace(/\W+/g, "-")}.pdf`).catch((error) => toast.fromError(error, "Could not download that payslip."))}
+                >
+                  PDF
+                </Button>
               </li>
             ))}
           </ul>

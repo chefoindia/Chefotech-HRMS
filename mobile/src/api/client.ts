@@ -24,7 +24,9 @@ const REFRESH_KEY = "chefotech.refreshToken";
 const BASE_KEY = "chefotech.apiBaseUrl";
 
 /** Requests that have not answered by now are treated as failed. */
-const TIMEOUT_MS = 20_000;
+// Long enough to ride out a cold start on a sleeping free-tier API host
+// (the first request after idle can take 30-50 seconds to be answered).
+const TIMEOUT_MS = 55_000;
 
 /**
  * Where the API lives.
@@ -196,10 +198,12 @@ interface RequestOptions {
   /** Skip the refresh-and-retry dance; used by the refresh call itself. */
   skipAuth?: boolean;
   signal?: AbortSignal;
+  /** Extra request headers — the session list needs the refresh token to mark "this device". */
+  headers?: Record<string, string>;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
-  const { method = "GET", body, query, skipAuth, signal } = options;
+  const { method = "GET", body, query, skipAuth, signal, headers: extraHeaders } = options;
   const base = await getBaseUrl();
 
   let url = `${base}${path.startsWith("/api") ? "" : API_PREFIX}${path}`;
@@ -232,6 +236,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
           // The backend decides web vs mobile capture mode from this, so it
           // must clearly say mobile.
           "User-Agent": `${BRAND.userAgentProduct}/${BRAND.version} (${Platform.OS})`,
+          ...(extraHeaders || {}),
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
@@ -316,5 +321,52 @@ export const api = {
     if (/^https?:\/\//.test(path)) return path;
     const base = await getBaseUrl();
     return `${base}${path.startsWith("/api") ? "" : API_PREFIX}${path}`;
+  },
+
+  /**
+   * Multipart upload: a photo of a receipt, an ID scan, a new avatar. The
+   * Content-Type is left to fetch so the multipart boundary is set for us.
+   */
+  async upload<T>(path: string, form: FormData): Promise<ApiResponse<T>> {
+    const base = await getBaseUrl();
+    const url = `${base}${path.startsWith("/api") ? "" : API_PREFIX}${path}`;
+    const send = async () => {
+      const { access } = await tokens.get();
+      return fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          ...(access ? { Authorization: `Bearer ${access}` } : {}),
+          "User-Agent": `${BRAND.userAgentProduct}/${BRAND.version} (${Platform.OS})`,
+        },
+        body: form,
+      });
+    };
+    let response: Response;
+    try {
+      response = await send();
+    } catch {
+      throw new ApiError("You appear to be offline. Check your connection and try again.", { isOffline: true, code: "OFFLINE" });
+    }
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (!refreshed) {
+        await tokens.clear();
+        notifySignedOut();
+        throw new ApiError("Your session has ended. Please sign in again.", { status: 401, code: "SESSION_EXPIRED" });
+      }
+      response = await send();
+    }
+    let payload: any = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (!response.ok) {
+      const error = payload?.error ?? {};
+      throw new ApiError(error.message || "The upload failed. Please try again.", { status: response.status, code: error.code });
+    }
+    return { data: payload?.data as T, meta: payload?.meta };
   },
 };

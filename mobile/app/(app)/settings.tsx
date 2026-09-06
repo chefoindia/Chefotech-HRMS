@@ -209,6 +209,12 @@ export default function Settings() {
           />
         </Card>
 
+        <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginTop: spacing.sm }}>
+          <Row icon="options-outline" title="All notification preferences" subtitle="Per-topic channels, quiet hours, digest and devices" onPress={() => router.push("/(app)/notification-preferences")} />
+          <Divider />
+          <Row icon="shield-checkmark-outline" title="Account security" subtitle="Two-factor, password, signed-in devices" onPress={() => router.push("/(app)/security")} />
+        </Card>
+
         <SectionHeader title="Connection" />
         <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
           <Row

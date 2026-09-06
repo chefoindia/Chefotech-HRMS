@@ -2,73 +2,37 @@ import { useState } from "react";
 import { Pressable, RefreshControl, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
-import { format } from "date-fns";
-import { usePayslips, type Payslip } from "../../src/api/hooks";
-import { api, tokens, ApiError } from "../../src/api/client";
+import { usePayslip, usePayslips, type Payslip } from "../../src/api/hooks";
+import { ApiError } from "../../src/api/client";
+import { useSession } from "../../src/auth/session";
 import { useColors } from "../../src/theme/ThemeProvider";
-import {
-  Badge,
-  Card,
-  EmptyState,
-  ErrorState,
-  Loading,
-  Screen,
-  Txt,
-} from "../../src/components/ui";
+import { Button, Card, EmptyState, ErrorState, Loading, Screen, Txt } from "../../src/components/ui";
+import { Sheet } from "../../src/components/Sheet";
 import { radius, spacing } from "../../src/theme";
 import { useToast } from "../../src/components/Toast";
+import { openFile } from "../../src/lib/files";
+import { dateLabel, money } from "../../src/lib/format";
 
 /**
- * Payslips.
- *
- * Only published ones reach this list — the API already filters drafts, and a
- * phone showing an unapproved figure to an employee before payroll has signed
- * it off would be worse than showing nothing.
- *
- * Download goes through the share sheet rather than writing to the Downloads
- * folder. It is the one path that works identically on both platforms, and it
- * lets the person put the PDF wherever they actually need it — usually into a
- * bank's loan application.
+ * Payslips — the web portal's /me/payslips: every published payslip, the
+ * working behind each figure, and the PDF to share with a bank.
  */
 export default function Payslips() {
   const colors = useColors();
   const toast = useToast();
+  const { session } = useSession();
+  const currency = session?.organization?.currency || "INR";
   const query = usePayslips();
+  const [viewing, setViewing] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const allowed = !session || session.permissions.includes("payroll.view_own_payslip");
 
   const download = async (payslip: Payslip) => {
     setDownloading(payslip.id);
     try {
-      const url = await api.fileUrl(`/payroll/payslips/${payslip.id}/pdf`);
-      const { access } = await tokens.get();
-
-      const label = payslip.period.label ?? `${payslip.period.year}-${payslip.period.month}`;
-      const target = new File(Paths.cache, `payslip-${label.replace(/\W+/g, "-")}.pdf`);
-
-      // The cache is shared across launches, so a payslip downloaded before
-      // must be replaced rather than throwing "already exists".
-      const file = await File.downloadFileAsync(url, target, {
-        headers: access ? { Authorization: `Bearer ${access}` } : undefined,
-        idempotent: true,
-      });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(file.uri, {
-          mimeType: "application/pdf",
-          UTI: "com.adobe.pdf",
-          dialogTitle: `Payslip · ${label}`,
-        });
-      } else {
-        toast.success("Payslip downloaded.");
-      }
+      await openFile(`/payroll/payslips/${payslip.id}/pdf`, `payslip-${payslip.periodLabel.replace(/\W+/g, "-")}.pdf`, "application/pdf");
     } catch (error) {
-      toast.error(
-        error instanceof ApiError
-          ? error.message
-          : "Could not download that payslip. Please try again."
-      );
+      toast.error(error instanceof ApiError ? error.message : "Could not download that payslip. Please try again.");
     } finally {
       setDownloading(null);
     }
@@ -76,114 +40,174 @@ export default function Payslips() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceMuted }} edges={["top"]}>
-      <Screen
-        refreshControl={
-          <RefreshControl
-            refreshing={query.isRefetching}
-            onRefresh={query.refetch}
-            tintColor={colors.brand[600]}
-          />
-        }
-      >
+      <Screen refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={query.refetch} tintColor={colors.brand[600]} />}>
         <Txt variant="title" style={{ marginBottom: spacing.lg }}>
-          Payslips
+          My payslips
         </Txt>
 
-        {query.isLoading ? (
+        {!allowed ? (
+          <Card>
+            <EmptyState icon="lock-closed-outline" title="Payslips are not available to you" body="Ask HR if you think you should be seeing them." />
+          </Card>
+        ) : query.isLoading ? (
           <Loading label="Loading your payslips…" />
         ) : query.isError ? (
-          <ErrorState
-            message={
-              query.error instanceof ApiError ? query.error.message : "Could not load your payslips."
-            }
-            onRetry={query.refetch}
-          />
+          <ErrorState message={query.error instanceof ApiError ? query.error.message : "Could not load your payslips."} onRetry={query.refetch} />
         ) : (query.data ?? []).length === 0 ? (
           <Card>
-            <EmptyState
-              icon="wallet-outline"
-              title="No payslips yet"
-              body="Payslips appear here once your employer publishes them for a pay period."
-            />
+            <EmptyState icon="wallet-outline" title="No payslips yet" body="They appear here as soon as payroll publishes them." />
           </Card>
         ) : (
           <View style={{ gap: spacing.md }}>
             {(query.data ?? []).map((payslip) => (
               <Card key={payslip.id}>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.brand[50],
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: spacing.md,
-                    }}
-                  >
-                    <Ionicons name="document-text-outline" size={20} color={colors.brand[600]} />
-                  </View>
-
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Txt variant="bodyMedium" numberOfLines={1}>
-                      {payslip.period.label ??
-                        format(
-                          new Date(payslip.period.year, payslip.period.month - 1),
-                          "MMMM yyyy"
-                        )}
-                    </Txt>
-                    {payslip.publishedAt && (
-                      <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
-                        Published {format(new Date(payslip.publishedAt), "d MMM yyyy")}
+                <Pressable onPress={() => setViewing(payslip.id)} accessibilityRole="button">
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View style={{ width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.brand[50], alignItems: "center", justifyContent: "center", marginRight: spacing.md }}>
+                      <Ionicons name="document-text-outline" size={20} color={colors.brand[600]} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Txt variant="bodyMedium" numberOfLines={1}>
+                        {payslip.periodLabel}
                       </Txt>
-                    )}
+                      <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                        {payslip.payslipNumber}
+                        {payslip.publishedAt ? ` · published ${dateLabel(payslip.publishedAt)}` : ""}
+                      </Txt>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Txt variant="bodyMedium">{money(payslip.net, currency, 2)}</Txt>
+                      <Txt variant="caption" tone="subtle">
+                        net pay
+                      </Txt>
+                    </View>
                   </View>
-
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Txt variant="bodyMedium">
-                      {payslip.currency ?? "₹"}
-                      {Number(payslip.netPay ?? 0).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </Txt>
-                    <Txt variant="caption" tone="subtle">
-                      net pay
-                    </Txt>
+                  <View style={{ flexDirection: "row", marginTop: spacing.md }}>
+                    <View style={{ flex: 1 }}>
+                      <Txt variant="caption" tone="subtle">
+                        GROSS
+                      </Txt>
+                      <Txt variant="label">{money(payslip.gross, currency, 2)}</Txt>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Txt variant="caption" tone="subtle">
+                        DEDUCTIONS
+                      </Txt>
+                      <Txt variant="label">{money(payslip.totalDeductions, currency, 2)}</Txt>
+                    </View>
+                  </View>
+                </Pressable>
+                <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
+                  <View style={{ flex: 1 }}>
+                    <Button title="View" variant="secondary" size="sm" icon="eye-outline" onPress={() => setViewing(payslip.id)} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button title={downloading === payslip.id ? "Preparing…" : "Download PDF"} variant="secondary" size="sm" icon="download-outline" onPress={() => download(payslip)} loading={downloading === payslip.id} />
                   </View>
                 </View>
-
-                <Pressable
-                  onPress={() => download(payslip)}
-                  disabled={downloading === payslip.id}
-                  accessibilityRole="button"
-                  accessibilityLabel="Download payslip"
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginTop: spacing.md,
-                    paddingVertical: spacing.md,
-                    borderRadius: radius.sm,
-                    backgroundColor: colors.surfaceSunken,
-                    opacity: pressed || downloading === payslip.id ? 0.6 : 1,
-                  })}
-                >
-                  <Ionicons
-                    name={downloading === payslip.id ? "hourglass-outline" : "download-outline"}
-                    size={16}
-                    color={colors.brand[600]}
-                  />
-                  <Txt variant="label" tone="brand" style={{ marginLeft: 6 }}>
-                    {downloading === payslip.id ? "Preparing…" : "Download PDF"}
-                  </Txt>
-                </Pressable>
               </Card>
             ))}
           </View>
         )}
       </Screen>
+
+      {viewing && <PayslipSheet id={viewing} currency={currency} onClose={() => setViewing(null)} />}
     </SafeAreaView>
+  );
+}
+
+function PayslipSheet({ id, currency, onClose }: { id: string; currency: string; onClose: () => void }) {
+  const colors = useColors();
+  const query = usePayslip(id);
+  const payslip = query.data;
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const lines = payslip?.snapshot?.lines || [];
+  const earnings = lines.filter((l) => l.type === "earning" && l.showOnPayslip);
+  const deductions = lines.filter((l) => l.type === "deduction" && l.showOnPayslip);
+
+  return (
+    <Sheet open onClose={onClose} title={payslip ? `Payslip · ${payslip.periodLabel}` : "Payslip"} subtitle={payslip?.payslipNumber} tall>
+      {!payslip ? (
+        <Loading />
+      ) : (
+        <View style={{ paddingBottom: spacing.lg }}>
+          {payslip.snapshot?.attendance && (
+            <View style={{ flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg }}>
+              <Metric label="Days" value={payslip.snapshot.attendance.totalDays} />
+              <Metric label="Payable" value={payslip.snapshot.attendance.payableDays} />
+              <Metric label="Loss of pay" value={payslip.snapshot.attendance.lossOfPayDays} />
+              <Metric label="Paid leave" value={payslip.snapshot.attendance.paidLeaveDays} />
+            </View>
+          )}
+          <Section title="Earnings" lines={earnings} currency={currency} />
+          <Section title="Deductions" lines={deductions} currency={currency} />
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: colors.brand[200], backgroundColor: colors.brand[50], borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md }}>
+            <Txt variant="bodyMedium" style={{ color: colors.brand[700] }}>
+              Net payable
+            </Txt>
+            <Txt variant="heading" style={{ color: colors.brand[700] }}>
+              {money(payslip.net, currency, 2)}
+            </Txt>
+          </View>
+          {payslip.snapshot?.breakdown && payslip.snapshot.breakdown.length > 0 && (
+            <View style={{ marginTop: spacing.lg }}>
+              <Pressable onPress={() => setShowBreakdown(!showBreakdown)} style={{ flexDirection: "row", alignItems: "center" }}>
+                <Txt variant="label" tone="muted" style={{ flex: 1 }}>
+                  How this was calculated
+                </Txt>
+                <Ionicons name={showBreakdown ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
+              </Pressable>
+              {showBreakdown &&
+                payslip.snapshot.breakdown.map((entry, index) => (
+                  <View key={index} style={{ flexDirection: "row", gap: spacing.sm, marginTop: 6 }}>
+                    <Txt variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
+                      {entry.detail}
+                    </Txt>
+                    <Txt variant="caption" style={{ lineHeight: 18 }}>
+                      {entry.effect}
+                    </Txt>
+                  </View>
+                ))}
+            </View>
+          )}
+        </View>
+      )}
+    </Sheet>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  const colors = useColors();
+  return (
+    <View style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, alignItems: "center" }}>
+      <Txt variant="caption" tone="subtle" style={{ fontSize: 10, textTransform: "uppercase" }}>
+        {label}
+      </Txt>
+      <Txt variant="bodyMedium" style={{ marginTop: 2 }}>
+        {value}
+      </Txt>
+    </View>
+  );
+}
+
+function Section({ title, lines, currency }: { title: string; lines: { code: string; name: string; amount: number }[]; currency: string }) {
+  const colors = useColors();
+  if (!lines.length) return null;
+  return (
+    <View style={{ marginBottom: spacing.md }}>
+      <Txt variant="caption" tone="subtle" style={{ textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
+        {title}
+      </Txt>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
+        {lines.map((line, index) => (
+          <View key={line.code} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: 8, borderTopWidth: index ? 1 : 0, borderTopColor: colors.border }}>
+            <Txt variant="body" style={{ flex: 1 }}>
+              {line.name}
+            </Txt>
+            <Txt variant="bodyMedium">{money(line.amount, currency, 2)}</Txt>
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }

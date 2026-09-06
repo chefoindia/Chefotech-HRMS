@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Release signing and built artefacts never go in git
+/keystore/
+/dist/
+.env.production

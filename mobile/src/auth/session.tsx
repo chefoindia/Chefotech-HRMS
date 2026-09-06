@@ -33,6 +33,9 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
+  currency?: string;
+  locale?: string;
+  timezone?: string;
   branding?: { logoUrl?: string | null; primaryColor?: string | null };
 }
 
@@ -42,6 +45,11 @@ export interface Session {
   permissions: string[];
   employeeId: string | null;
   roles?: { id: string; key: string; name: string }[];
+  /** The organization's password-expiry rule says this password is too old. */
+  passwordExpired?: boolean;
+  /** The organization requires two-factor for administrators and this account has none yet. */
+  mfaSetupRequired?: boolean;
+  mfaEnabled?: boolean;
 }
 
 interface SessionValue {

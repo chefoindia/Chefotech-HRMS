@@ -261,6 +261,7 @@ export const PORTAL_NAVIGATION: NavItem[] = [
   { label: "People", href: "/me/directory", icon: Users, permission: "directory.view" },
   { label: "My attendance", href: "/me/attendance", icon: Clock },
   { label: "My leave", href: "/me/leave", icon: CalendarDays },
+  { label: "Holidays", href: "/me/holidays", icon: CalendarRange, permission: "holiday.view" },
   { label: "My payslips", href: "/me/payslips", icon: Wallet, permission: "payroll.view_own_payslip" },
   { label: "My requests", href: "/me/requests", icon: ClipboardCheck, permission: "request.submit" },
   { label: "My performance", href: "/me/performance", icon: Target, permission: "performance.view_own" },

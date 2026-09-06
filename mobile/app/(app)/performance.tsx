@@ -2,7 +2,9 @@ import { useState } from "react";
 import { RefreshControl, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { format } from "date-fns";
-import { useAcknowledgeReview, useMyGoals, useMyReviews, useSubmitSelfReview, useUpdateGoalProgress, type GoalItem, type ReviewItem } from "../../src/api/hooks";
+import { useAcknowledgeReview, useCreateGoal, useMyGoals, useMyReviews, useSubmitSelfReview, useUpdateGoalProgress, type GoalItem, type ReviewItem } from "../../src/api/hooks";
+import { Sheet } from "../../src/components/Sheet";
+import { DatePickerSheet } from "../../src/components/DatePickerSheet";
 import { ApiError } from "../../src/api/client";
 import { useColors } from "../../src/theme/ThemeProvider";
 import { Badge, Button, Card, Divider, EmptyState, ErrorState, Field, Loading, Screen, SectionHeader, Txt } from "../../src/components/ui";
@@ -18,6 +20,7 @@ export default function Performance() {
   const colors = useColors();
   const goals = useMyGoals();
   const reviews = useMyReviews();
+  const [creating, setCreating] = useState(false);
   const refreshing = goals.isRefetching || reviews.isRefetching;
   const refetch = () => {
     goals.refetch();
@@ -30,7 +33,7 @@ export default function Performance() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceMuted }} edges={["top"]}>
       <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.brand[600]} />}>
-        <ScreenHeader title="My performance" />
+        <ScreenHeader title="My performance" action={<Button title="New goal" size="sm" icon="add" onPress={() => setCreating(true)} />} />
 
         <SectionHeader title="Reviews" />
         {reviews.isLoading ? (
@@ -53,7 +56,7 @@ export default function Performance() {
         ) : goals.isError ? (
           <ErrorState message={(goals.error as Error).message} onRetry={goals.refetch} />
         ) : !goals.data?.length ? (
-          <EmptyState icon="flag-outline" title="No goals yet" body="Agree a few with your manager on the web portal; progress can be updated from here." />
+          <EmptyState icon="flag-outline" title="No goals yet" body="Agree a few with your manager, or add your own." action={<Button title="New goal" onPress={() => setCreating(true)} />} />
         ) : (
           <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
             {[...active, ...finished].map((goal, index) => (
@@ -65,7 +68,77 @@ export default function Performance() {
           </Card>
         )}
       </Screen>
+      {creating && <NewGoalSheet onClose={() => setCreating(false)} />}
     </SafeAreaView>
+  );
+}
+
+function NewGoalSheet({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  const create = useCreateGoal();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [metric, setMetric] = useState("");
+  const [target, setTarget] = useState("");
+  const [weight, setWeight] = useState("25");
+  const [dueDate, setDueDate] = useState("");
+  const [picking, setPicking] = useState(false);
+
+  const submit = async () => {
+    try {
+      await create.mutateAsync({ title: title.trim(), description, metric, target, weight: Math.max(1, Math.min(100, Number(weight) || 25)), dueDate: dueDate || null });
+      toast.success("Goal added.");
+      onClose();
+    } catch (caught) {
+      toast.error(caught instanceof ApiError ? caught.message : "Could not add the goal.");
+    }
+  };
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="New goal"
+      footer={
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Button title="Cancel" variant="secondary" onPress={onClose} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button title="Add goal" onPress={submit} loading={create.isPending} disabled={!title.trim()} />
+          </View>
+        </View>
+      }
+    >
+      <Field label="Goal" placeholder="Cut average prep time by 10%" value={title} onChangeText={setTitle} />
+      <Field label="Why it matters (optional)" value={description} onChangeText={setDescription} multiline numberOfLines={2} style={{ minHeight: 56, textAlignVertical: "top" }} />
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <Field label="How it is measured" placeholder="Average prep minutes" value={metric} onChangeText={setMetric} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Field label="Target" placeholder="18" value={target} onChangeText={setTarget} />
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <Field label="Weight (1 to 100)" keyboardType="number-pad" value={weight} onChangeText={setWeight} hint="How much of the period this goal represents." />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Field label="Due (optional)" value={dueDate ? format(new Date(dueDate), "d MMM yyyy") : ""} placeholder="Pick a date" editable={false} onPressIn={() => setPicking(true)} />
+        </View>
+      </View>
+      <DatePickerSheet
+        open={picking}
+        value={dueDate || new Date().toISOString().slice(0, 10)}
+        title="Due date"
+        onClose={() => setPicking(false)}
+        onSelect={(value) => {
+          setDueDate(value);
+          setPicking(false);
+        }}
+      />
+    </Sheet>
   );
 }
 

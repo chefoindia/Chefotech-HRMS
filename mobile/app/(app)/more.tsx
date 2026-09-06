@@ -9,6 +9,7 @@ import { Card, Divider, Row, Screen, SectionHeader, Txt } from "../../src/compon
 import { radius, spacing } from "../../src/theme";
 import { versionLabel } from "../../src/brand";
 import { fontStyle } from "../../src/theme/fonts";
+import { refName } from "../../src/lib/format";
 
 /**
  * Everything that does not earn a tab.
@@ -83,9 +84,7 @@ export default function More() {
               </Txt>
               <Txt variant="caption" tone="muted" numberOfLines={1} style={{ marginTop: 2 }}>
                 {employee?.employeeCode ? `${employee.employeeCode} · ` : ""}
-                {typeof employee?.employment?.designation === "string"
-                  ? employee.employment.designation
-                  : employee?.employment?.designation?.name ?? session?.organization?.name ?? ""}
+                {refName(employee?.employment?.designationId, session?.organization?.name ?? "")}
               </Txt>
             </View>
           </View>
@@ -93,6 +92,20 @@ export default function More() {
 
         <SectionHeader title="Your records" />
         <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
+          <Row
+            icon="sparkles-outline"
+            title="Getting started"
+            subtitle="Your joining checklist"
+            onPress={() => router.push("/(app)/onboarding")}
+          />
+          <Divider />
+          <Row
+            icon="people-outline"
+            title="People"
+            subtitle="Find a colleague and how to reach them"
+            onPress={() => router.push("/(app)/directory")}
+          />
+          <Divider />
           <Row
             icon="person-outline"
             title="Profile"
@@ -161,6 +174,13 @@ export default function More() {
             title="Surveys"
             subtitle="Questions from HR, a couple of minutes each"
             onPress={() => router.push("/(app)/surveys")}
+          />
+          <Divider />
+          <Row
+            icon="shield-checkmark-outline"
+            title="Security"
+            subtitle="Two-factor, password and signed-in devices"
+            onPress={() => router.push("/(app)/security")}
           />
           <Divider />
           <Row

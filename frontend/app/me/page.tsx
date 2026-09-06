@@ -265,7 +265,14 @@ export default function PortalHomePage() {
           </Card>
 
           <Card>
-            <CardHeader title="Upcoming holidays" />
+            <CardHeader
+              title="Upcoming holidays"
+              action={
+                <Link href="/me/holidays" className="text-[12.5px] font-medium text-brand-600 hover:underline">
+                  All holidays
+                </Link>
+              }
+            />
             {!data.upcomingHolidays.length ? (
               <p className="mt-4 text-[13px] text-[var(--text-muted)]">
                 No holidays coming up.

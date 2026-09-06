@@ -15,7 +15,8 @@ taking my word for it.
 |---|---|
 | Backend API | Works. 376 tests pass (`cd backend && npm test`), including the new integration suites for documents, sheets, security, requests, help desk, expenses, assets, loans, onboarding, exits, scheduled sheets, data export, API keys, webhooks, surveys and performance. |
 | Web portal + marketing site | Works. Type-checks clean (`cd frontend && npx tsc --noEmit`). |
-| Employee mobile app | Type-checks clean. Requests, help desk, expenses, assets, loans, surveys and performance screens added; two-factor sign-in supported. **Still never run on a physical device.** |
+| Employee mobile app | Type-checks clean and at feature parity with the employee web portal, screen for screen (see README, "one feature set, two shells"). A signed release APK is built by `mobile/scripts/build-android.js` and published at https://hrms.chefo.in/download. **Still never run on a physical device by a person — install the APK and walk every screen before handing it to employees.** |
+| Hosting | API on Render (https://chefotech-hrms.onrender.com), web on Vercel behind https://hrms.chefo.in, both deploying from `master`. |
 | Known security advisories | None. |
 | Version control | Git initialised, secrets excluded (`backend/.env`, `.storage/`, keystores). |
 
