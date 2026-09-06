@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, KeyRound, ListChecks, Pause, Play, Plus, RefreshCw, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import { BookOpen, Check, Copy, KeyRound, ListChecks, Pause, Play, Plus, RefreshCw, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { formatDate, formatDateTime, formatRelative, humanise } from "@/lib/format";
-import { Badge, Button, Callout, Card, CardHeader, Checkbox, ConfirmDialog, Drawer, EmptyState, FieldGrid, Input, Modal, NoAccessState, useToast } from "@/components/ui";
+import { Badge, Button, Callout, Card, CardHeader, Checkbox, ConfirmDialog, Drawer, EmptyState, FieldGrid, Input, Modal, NoAccessState, PageHeader, Tabs, useToast } from "@/components/ui";
+import { ApiDocsPanel } from "@/components/integrations/ApiDocsPanel";
 
 /**
  * API keys and webhooks — the two doors other systems use.
@@ -74,22 +75,62 @@ interface PermissionGroup {
 export default function IntegrationsSettingsPage() {
   const { session, can } = useSession();
   const locale = session?.organization?.locale || "en-IN";
+  const [tab, setTab] = useState("guide");
 
   if (!can("settings.manage_integrations")) return <NoAccessState what="API keys and webhooks" />;
 
   return (
-    <div className="space-y-5">
-      <Callout tone="info" icon={<KeyRound className="h-4 w-4" />}>
-        Send API requests with the header <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">x-api-key: ct_live_…</code> instead of a sign-in. Webhook
-        payloads are JSON with headers <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">X-Chefotech-Event</code>,{" "}
-        <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">X-Chefotech-Timestamp</code> and{" "}
-        <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">X-Chefotech-Signature: v1=&lt;hex&gt;</code>, where the hex is HMAC-SHA256 of{" "}
-        <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">&lt;timestamp&gt;.&lt;raw body&gt;</code> using the webhook&apos;s secret. A receiver that does not
-        answer 2xx within ten seconds is retried five times, and the webhook is paused after twenty failures in a row.
-      </Callout>
-      <ApiKeysCard locale={locale} />
-      <WebhooksCard locale={locale} />
-    </div>
+    <>
+      <PageHeader
+        title="API & webhooks"
+        description="Let another system read and write your HR data, and get told the moment something changes. Start with the guide — it has the base URL, working examples in four languages, and a console to try a request right here."
+      />
+
+      <Tabs
+        items={[
+          { key: "guide", label: "Guide & testing", icon: <BookOpen className="h-3.5 w-3.5" /> },
+          { key: "keys", label: "API keys", icon: <KeyRound className="h-3.5 w-3.5" /> },
+          { key: "webhooks", label: "Webhooks", icon: <WebhookIcon className="h-3.5 w-3.5" /> },
+        ]}
+        active={tab}
+        onChange={setTab}
+        className="mb-5"
+      />
+
+      {tab === "guide" && <ApiDocsPanel onGoToKeys={() => setTab("keys")} />}
+
+      {tab === "keys" && (
+        <div className="space-y-5">
+          <Callout tone="info" icon={<KeyRound className="h-4 w-4" />}>
+            A key authenticates a program rather than a person: send it as an{" "}
+            <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">x-api-key</code> header on every request. It carries
+            only the permissions you tick, can never create other keys, and stops working the moment you revoke it.{" "}
+            <button type="button" onClick={() => setTab("guide")} className="font-medium underline">
+              Read the guide
+            </button>{" "}
+            for examples and a request console.
+          </Callout>
+          <ApiKeysCard locale={locale} />
+        </div>
+      )}
+
+      {tab === "webhooks" && (
+        <div className="space-y-5">
+          <Callout tone="info" icon={<WebhookIcon className="h-4 w-4" />}>
+            A webhook is us calling you. Give a URL that answers{" "}
+            <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">200</code> within ten seconds, pick the events, and
+            verify the{" "}
+            <code className="rounded bg-[var(--surface-muted)] px-1 py-0.5 text-[12px]">X-Chefotech-Signature</code> header before trusting a
+            payload.{" "}
+            <button type="button" onClick={() => setTab("guide")} className="font-medium underline">
+              The guide
+            </button>{" "}
+            has copy-paste verification code for Node, Python and PHP.
+          </Callout>
+          <WebhooksCard locale={locale} />
+        </div>
+      )}
+    </>
   );
 }
 

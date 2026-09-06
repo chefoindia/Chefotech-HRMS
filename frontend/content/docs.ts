@@ -12,6 +12,25 @@
  * mode".
  */
 
+import { DEVELOPER_ARTICLES } from "./docsDevelopers";
+
+export interface DocCode {
+  code: string;
+  language?: string;
+  caption?: string;
+}
+
+/**
+ * A paragraph, a bullet list, or a block of code someone is meant to run.
+ * API documentation without the third kind is a description of a thing
+ * rather than a way to use it.
+ */
+export type DocBlock = string | string[] | DocCode;
+
+export function isCode(block: DocBlock): block is DocCode {
+  return typeof block === "object" && block !== null && !Array.isArray(block) && "code" in block;
+}
+
 export interface DocArticle {
   slug: string;
   title: string;
@@ -21,7 +40,7 @@ export interface DocArticle {
   appPath?: string;
   /** Tour that walks the reader through it, if one exists. */
   tourId?: string;
-  sections: { heading: string; body: (string | string[])[] }[];
+  sections: { heading: string; body: DocBlock[] }[];
   related?: string[];
 }
 
@@ -47,6 +66,11 @@ export const DOC_CATEGORIES = [
     id: "administration",
     title: "Administration",
     description: "Users, roles, security, audit and billing.",
+  },
+  {
+    id: "developers",
+    title: "Developers and API",
+    description: "Connect another system: API keys, endpoints, webhooks, and how to test them.",
   },
 ] as const;
 
@@ -584,6 +608,7 @@ export const DOC_ARTICLES: DocArticle[] = [
     ],
     related: [],
   },
+  ...DEVELOPER_ARTICLES,
 ];
 
 export const DOCS_BY_SLUG: Record<string, DocArticle> = Object.fromEntries(

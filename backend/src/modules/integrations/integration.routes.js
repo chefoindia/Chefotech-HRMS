@@ -21,7 +21,29 @@ router.use((req, _res, next) => {
   return next();
 });
 
+const catalogue = require("./apiCatalogue");
+
 router.get("/events", asyncHandler(async (_req, res) => ok(res, service.eventCatalog())));
+
+/**
+ * Every endpoint this API offers, with the permission each one needs.
+ *
+ * Derived from the route files rather than hand-written, so the reference an
+ * integrator reads cannot drift from the routes the server actually mounts.
+ */
+router.get("/endpoints", asyncHandler(async (_req, res) => ok(res, catalogue.catalogue())));
+
+/** The same catalogue as a Postman collection, ready to import. */
+router.get(
+  "/postman-collection",
+  asyncHandler(async (req, res) => {
+    const organizationName = req.auth && req.auth.organization ? req.auth.organization.name : null;
+    const collection = catalogue.postmanCollection({ organizationName });
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="chefotech-hrms-api.postman_collection.json"`);
+    return res.send(JSON.stringify(collection, null, 2));
+  })
+);
 
 router.get("/api-keys", asyncHandler(async (_req, res) => ok(res, await service.listApiKeys())));
 router.post(

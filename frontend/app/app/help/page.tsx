@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BookOpen, LifeBuoy, Mail, Search, Sparkles } from "lucide-react";
-import { DOC_CATEGORIES, DOC_ARTICLES, articlesInCategory } from "@/content/docs";
+import { DOC_CATEGORIES, DOC_ARTICLES, articlesInCategory, isCode } from "@/content/docs";
 import { COMPANY } from "@/content/company";
 
 /**
@@ -29,7 +29,11 @@ export default function HelpCentrePage() {
         // Search the body too — people search for the phrase they saw on
         // screen ("sandwich"), not for the title of the article about it.
         ...article.sections.flatMap((section) =>
-          section.body.flatMap((block) => (Array.isArray(block) ? block : [block]))
+          // Code is searchable too: people look for the header name or the
+          // function they saw in an example.
+          section.body.flatMap((block) =>
+            isCode(block) ? [block.code, block.caption || ""] : Array.isArray(block) ? block : [block]
+          )
         ),
       ]
         .join(" ")

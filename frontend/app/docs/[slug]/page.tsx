@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
-import { DOCS_BY_SLUG, DOC_ARTICLES, DOC_CATEGORIES } from "@/content/docs";
+import { CodeBlock } from "@/components/docs/CodeBlock";
+import { DOCS_BY_SLUG, DOC_ARTICLES, DOC_CATEGORIES, isCode } from "@/content/docs";
 import { MarketingHeader, MarketingFooter } from "@/components/marketing/Chrome";
 import { COMPANY } from "@/content/company";
 
@@ -87,7 +88,9 @@ export default async function DocArticlePage({
                 </h2>
                 <div className="mt-3 space-y-3">
                   {section.body.map((block, index) =>
-                    Array.isArray(block) ? (
+                    isCode(block) ? (
+                      <CodeBlock key={index} code={block.code} language={block.language} caption={block.caption} />
+                    ) : Array.isArray(block) ? (
                       <ul
                         key={index}
                         className="ml-1 space-y-2 border-l-2 border-[var(--border)] pl-4"

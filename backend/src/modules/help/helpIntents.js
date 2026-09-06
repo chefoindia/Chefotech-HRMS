@@ -210,6 +210,55 @@ const INTENTS = [
       "Attendance → Locks → Lock period. Locked days cannot be edited or recalculated, which is what payroll depends on. Unlocking is possible but is recorded as a critical audit event.",
   },
   {
+    id: "use_the_api",
+    phrases: [
+      "how do i use the api",
+      "api documentation",
+      "connect another system",
+      "integrate with our erp",
+      "rest api",
+      "api base url",
+      "how to call the api",
+      "api key",
+      "developer docs",
+    ],
+    keywords: ["api", "integration", "integrate", "developer", "rest", "endpoint", "key", "token", "curl"],
+    route: "/app/settings/integrations",
+    answer:
+      "Settings → API & webhooks → Guide & testing. It shows your base URL, how to create a key, working examples in curl, JavaScript, Python and PHP, a console that sends a real request from the page, the full endpoint list with the permission each one needs, and a Postman collection to download.",
+  },
+  {
+    id: "test_the_api",
+    phrases: [
+      "test the api",
+      "postman collection",
+      "try an api request",
+      "api not working",
+      "401 unauthorized api",
+      "403 forbidden api",
+      "api returns error",
+    ],
+    keywords: ["postman", "test", "401", "403", "unauthorized", "forbidden", "curl", "insomnia"],
+    route: "/app/settings/integrations",
+    answer:
+      "Use the request console in Settings → API & webhooks → Guide & testing: paste a key, pick an endpoint, press Send. A 401 means the key is wrong, expired or revoked; a 403 means the key is valid but lacks that permission, which the endpoint reference names. The same screen downloads a Postman collection of every endpoint.",
+  },
+  {
+    id: "set_up_webhook",
+    phrases: [
+      "set up a webhook",
+      "webhook",
+      "get notified when something happens",
+      "push events to my system",
+      "webhook signature",
+      "verify webhook",
+    ],
+    keywords: ["webhook", "event", "signature", "hmac", "callback", "push", "subscribe"],
+    route: "/app/settings/integrations",
+    answer:
+      "Settings → API & webhooks → Webhooks. Add a URL that answers 200 within ten seconds, tick the events, and copy the signing secret shown once. Press Test to send a synthetic event. Verify the X-Chefotech-Signature header before trusting a payload — the guide tab has copy-paste code for Node, Python and PHP.",
+  },
+  {
     id: "sandwich_leave",
     phrases: [
       "sandwich leave rule",
