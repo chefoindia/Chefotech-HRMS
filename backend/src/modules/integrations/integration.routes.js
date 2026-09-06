@@ -31,14 +31,20 @@ router.get("/events", asyncHandler(async (_req, res) => ok(res, service.eventCat
  * Derived from the route files rather than hand-written, so the reference an
  * integrator reads cannot drift from the routes the server actually mounts.
  */
-router.get("/endpoints", asyncHandler(async (_req, res) => ok(res, catalogue.catalogue())));
+router.get(
+  "/endpoints",
+  asyncHandler(async (req, res) => ok(res, catalogue.catalogue({ baseUrl: catalogue.baseUrlFromRequest(req) })))
+);
 
 /** The same catalogue as a Postman collection, ready to import. */
 router.get(
   "/postman-collection",
   asyncHandler(async (req, res) => {
     const organizationName = req.auth && req.auth.organization ? req.auth.organization.name : null;
-    const collection = catalogue.postmanCollection({ organizationName });
+    const collection = catalogue.postmanCollection({
+      organizationName,
+      baseUrl: catalogue.baseUrlFromRequest(req),
+    });
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="chefotech-hrms-api.postman_collection.json"`);
     return res.send(JSON.stringify(collection, null, 2));

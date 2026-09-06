@@ -70,6 +70,24 @@ test("the API catalogue", async (t) => {
     }
   });
 
+  await t.test("takes its base URL from the request, not the configuration", () => {
+    // PUBLIC_API_URL is a deployment setting, and a deployment that points it
+    // at the website hands every integrator a collection where all 461
+    // requests 404. The origin the request arrived on always reaches the API.
+    const req = { protocol: "https", get: (header) => (header === "host" ? "api.example.test" : null) };
+    const baseUrl = catalogue.baseUrlFromRequest(req);
+    assert.equal(baseUrl, `https://api.example.test${data.apiPrefix}`);
+
+    assert.equal(catalogue.catalogue({ baseUrl }).baseUrl, baseUrl);
+    const collection = catalogue.postmanCollection({ baseUrl });
+    const variables = Object.fromEntries(collection.variable.map((v) => [v.key, v.value]));
+    assert.equal(variables.baseUrl, baseUrl);
+
+    // Without a request — a script, a test — the configured origin still wins.
+    assert.equal(catalogue.baseUrlFromRequest(null), null);
+    assert.equal(catalogue.catalogue().baseUrl, data.baseUrl);
+  });
+
   await t.test("produces a Postman collection that imports", () => {
     const collection = catalogue.postmanCollection({ organizationName: "Saffron Table" });
 

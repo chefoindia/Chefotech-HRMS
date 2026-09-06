@@ -170,10 +170,25 @@ function build() {
   };
 }
 
-/** The catalogue, built once per process. */
-function catalogue() {
+/**
+ * The catalogue, built once per process.
+ *
+ * `baseUrl` overrides the configured origin. Callers that have a request pass
+ * the origin it actually arrived on, because PUBLIC_API_URL is a deployment
+ * setting and a wrong one is invisible until an integrator imports the
+ * collection and every request 404s. The origin a request came in on reaches
+ * the API by construction.
+ */
+function catalogue({ baseUrl } = {}) {
   if (!cached) cached = build();
-  return cached;
+  return baseUrl ? { ...cached, baseUrl } : cached;
+}
+
+/** The origin this request arrived on, honouring the proxy when we trust it. */
+function baseUrlFromRequest(req) {
+  const host = req && typeof req.get === "function" ? req.get("host") : null;
+  if (!host) return null;
+  return `${req.protocol}://${host}${env.app.apiPrefix}`;
 }
 
 /**
@@ -181,8 +196,8 @@ function catalogue() {
  * key and base URL as collection variables so importing it and pasting one
  * key is the whole setup.
  */
-function postmanCollection({ organizationName } = {}) {
-  const data = catalogue();
+function postmanCollection({ organizationName, baseUrl } = {}) {
+  const data = catalogue({ baseUrl });
 
   const toItem = (endpoint) => {
     const segments = endpoint.path.split("/").filter(Boolean);
@@ -238,4 +253,4 @@ function postmanCollection({ organizationName } = {}) {
   };
 }
 
-module.exports = { catalogue, postmanCollection };
+module.exports = { catalogue, postmanCollection, baseUrlFromRequest };
