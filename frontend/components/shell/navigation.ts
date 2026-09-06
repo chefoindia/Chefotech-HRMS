@@ -274,6 +274,9 @@ export const PORTAL_NAVIGATION: NavItem[] = [
   { label: "Notifications", href: "/me/notifications", icon: Bell },
   { label: "My profile", href: "/me/profile", icon: Users },
   { label: "Security", href: "/me/security", icon: ShieldCheck },
+  // Employees are redirected out of /app, so the admin help centre is not
+  // reachable for them — this is the same documentation, narrowed.
+  { label: "Help", href: "/me/help", icon: LifeBuoy },
 ];
 
 interface FilterContext {
