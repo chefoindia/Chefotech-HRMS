@@ -238,7 +238,9 @@ export const APP_PLATFORMS = [
     status: "live" as const,
     body: "A native app: offline-tolerant, with biometric app-lock and push-ready notifications. Installed directly — no Play Store account needed to try it.",
     cta: "Download for Android",
-    href: "/downloads/chefotech-hrms.apk",
+    // The APK lives in this repository and is served straight from GitHub,
+    // which handles a 60 MB binary reliably where a static-site host may not.
+    href: "https://github.com/chefoindia/Chefotech-HRMS/raw/master/frontend/public/downloads/chefotech-hrms.apk",
   },
   {
     id: "ios",
