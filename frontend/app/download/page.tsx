@@ -118,11 +118,12 @@ export default function DownloadPage() {
                 The Android download is installed directly rather than through the Play Store —
                 your phone will ask you to confirm &ldquo;install from unknown sources&rdquo; the
                 first time. That is expected for a direct install; it is the same app either way.
-                This build is a development package for early testing, roughly 220&nbsp;MB —
-                larger and slower to update than the Play Store release we will publish once the
-                app has been through a proper store listing. On first launch, open{" "}
+                This is a signed release build, version 1.1.0, about 62&nbsp;MB, for 64-bit and
+                32-bit ARM phones. It is already pointed at the Chefotech HRMS servers, so you sign
+                in with the same email and password you use on the web. If your employer runs their
+                own server, open{" "}
                 <span className="font-medium text-[var(--text)]">Settings → Connection</span> in
-                the app and confirm it points at your organisation&apos;s server address.
+                the app and enter its address.
               </p>
             </div>
           </div>
