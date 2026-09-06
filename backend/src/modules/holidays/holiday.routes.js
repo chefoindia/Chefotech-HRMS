@@ -62,6 +62,35 @@ router.get(
   })
 );
 
+/**
+ * The holiday calendar as an .ics file, so it can be subscribed to from
+ * Google Calendar, Outlook or a phone and stay in sync with what HR sets.
+ */
+router.get(
+  "/me/calendar.ics",
+  requirePermission("holiday.view"),
+  asyncHandler(async (req, res) => {
+    if (!req.auth.employeeId) throw AppError.notFound("Your employee record");
+    const employee = await Employee.findById(req.auth.employeeId).lean();
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const data = await service.forEmployee(employee, year);
+    const all = [...(data.holidays || []), ...(data.optional || []).filter((h) => (data.selected || []).some((s) => String(s) === String(h._id || h.id)))];
+    const escape = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ChefoTech HRMS//Holidays//EN", "CALSCALE:GREGORIAN", `X-WR-CALNAME:${escape(`${req.auth.organization.name} holidays ${year}`)}`];
+    for (const h of all) {
+      const date = String(h.date).replace(/-/g, "");
+      const next = new Date(`${h.date}T00:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      lines.push("BEGIN:VEVENT", `UID:${h._id || h.id}@chefotech-hrms`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${date}`, `DTEND;VALUE=DATE:${next.toISOString().slice(0, 10).replace(/-/g, "")}`, `SUMMARY:${escape(h.name)}${h.isOptional ? " (optional)" : ""}`, h.description ? `DESCRIPTION:${escape(h.description)}` : null, "TRANSP:TRANSPARENT", "END:VEVENT");
+    }
+    lines.push("END:VCALENDAR");
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="holidays-${year}.ics"`);
+    return res.send(lines.filter(Boolean).join("\r\n"));
+  })
+);
+
 router.post(
   "/me/optional",
   requirePermission("holiday.view"),

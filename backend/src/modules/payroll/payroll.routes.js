@@ -361,4 +361,50 @@ router.post(
   asyncHandler(async (req, res) => ok(res, await service.addAdjustment(req.params.id, req.body, req)))
 );
 
+// ── Payroll inputs: what the next run will pick up ──────────────────────────
+// Loan instalments, approved claims, encashments and one-off bonuses all
+// arrive here and wait for a run. HR can see the queue and add to it.
+
+const inputs = require("./inputs.service");
+
+router.get(
+  "/inputs",
+  requirePermission("payroll.view"),
+  validate({
+    query: listQuery({
+      employeeId: objectId().optional(),
+      status: z.enum(["pending", "applied", "cancelled"]).optional(),
+      sourceType: z.string().max(30).optional(),
+      periodKey: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const result = await inputs.list(req.query);
+    return paged(res, result.items, result);
+  })
+);
+
+router.post(
+  "/inputs",
+  requirePermission("payroll.process"),
+  validate({
+    body: z.object({
+      employeeId: objectId(),
+      type: z.enum(["earning", "deduction"]),
+      label: z.string().trim().min(1).max(120),
+      amount: z.number().positive().max(100_000_000),
+      reason: z.string().max(500).optional(),
+      periodKey: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => created(res, inputs.shape((await inputs.add(req.body, req)).toObject())))
+);
+
+router.post(
+  "/inputs/:id/cancel",
+  requirePermission("payroll.process"),
+  validate({ params: objectIdParam(), body: z.object({ reason: z.string().max(300).optional() }).optional() }),
+  asyncHandler(async (req, res) => ok(res, inputs.shape((await inputs.cancel(req.params.id, (req.body || {}).reason, req)).toObject())))
+);
+
 module.exports = router;

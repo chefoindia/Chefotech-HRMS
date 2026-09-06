@@ -32,7 +32,10 @@ const notificationSchema = createTenantSchema(
     },
     category: {
       type: String,
-      enum: ["leave", "attendance", "payroll", "document", "workflow", "employee", "system", "announcement"],
+      enum: [
+        "leave", "attendance", "payroll", "document", "workflow", "employee",
+        "system", "announcement", "ticket", "expense", "asset",
+      ],
       default: "system",
       index: true,
     },

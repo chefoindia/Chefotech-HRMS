@@ -122,6 +122,7 @@ const PERMISSION_GROUPS = [
       ["document.delete", "Delete documents"],
       ["document.manage_templates", "Create and edit document templates"],
       ["document.generate", "Generate documents from templates"],
+      ["document.manage_company", "Publish company policies and handbooks", 2],
     ],
   },
   {
@@ -193,6 +194,7 @@ const PERMISSION_GROUPS = [
     permissions: [
       ["notification.manage_templates", "Edit notification and email templates"],
       ["notification.broadcast", "Send announcements"],
+      ["notification.view_mail_log", "View the outbound email log and delivery status", 2],
     ],
   },
   {
@@ -206,9 +208,69 @@ const PERMISSION_GROUPS = [
       ["expense.approve", "Approve expenses"],
       ["asset.view", "View assets"],
       ["asset.manage", "Assign and manage assets"],
+      ["asset.view_own", "See the assets assigned to me", 3],
+      ["request.submit", "Submit requests (work from home, comp-off, encashment, letters)", 3],
+      ["request.approve", "Approve employee requests", 3],
+      ["request.view", "View every employee request", 3],
+      ["directory.view", "Browse the employee directory", 3],
+    ],
+  },
+  {
+    key: "helpdesk",
+    label: "Help desk",
+    permissions: [
+      ["ticket.create", "Raise help desk tickets", 3],
+      ["ticket.view_own", "View own tickets", 3],
+      ["ticket.manage", "Work the help desk queue as an agent", 3],
+    ],
+  },
+  {
+    key: "finance",
+    label: "Expenses and loans",
+    permissions: [
+      ["expense.view", "View every expense claim", 3],
+      ["expense.reimburse", "Mark claims as reimbursed and send them to payroll", 3],
+      ["loan.view_own", "View own loans and request one", 3],
+      ["loan.approve", "Approve loan and advance requests", 3],
+      ["loan.manage", "Record, disburse and close loans", 3],
+    ],
+  },
+  {
+    key: "lifecycle",
+    label: "Onboarding and exits",
+    permissions: [
+      ["onboarding.view", "View onboarding checklists and own tasks", 3],
+      ["onboarding.manage", "Design checklists and run onboarding", 3],
+      ["exit.view", "View exits and clearances", 3],
+      ["exit.manage", "Process resignations, clearances and settlements", 3],
+    ],
+  },
+  {
+    key: "engagement",
+    label: "Surveys and performance",
+    permissions: [
+      ["survey.respond", "Answer surveys", 3],
+      ["survey.manage", "Create surveys and see results", 3],
+      ["performance.view_own", "See own goals and reviews", 3],
+      ["performance.review", "Review direct reports", 3],
+      ["performance.manage", "Run review cycles and see every review", 3],
     ],
   },
 ];
+
+/**
+ * The catalog version.
+ *
+ * Roles store permissions as an expanded list, frozen at the moment the role
+ * was seeded or last edited. A permission added to this file later is
+ * therefore absent from every existing organization's HR Admin role, even
+ * though the template says `notification.*`. Each new permission carries the
+ * version it arrived in (the optional third element of its tuple); on boot,
+ * `rbac.service.syncSystemRolePermissions` grants system roles whatever their
+ * template would have given them since the version they were last synced at.
+ * Bump this whenever a permission is added.
+ */
+const PERMISSION_VERSION = 3;
 
 /** Flat list: ["employee.view", "employee.create", ...] */
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) =>
@@ -217,12 +279,17 @@ const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) =>
 
 const PERMISSION_META = Object.fromEntries(
   PERMISSION_GROUPS.flatMap((g) =>
-    g.permissions.map(([key, description]) => [
+    g.permissions.map(([key, description, version]) => [
       key,
-      { key, description, group: g.key, groupLabel: g.label },
+      { key, description, group: g.key, groupLabel: g.label, version: version || 1 },
     ])
   )
 );
+
+/** Permissions introduced after a given catalog version. */
+function permissionsAddedAfter(version) {
+  return ALL_PERMISSIONS.filter((key) => PERMISSION_META[key].version > (version || 1));
+}
 
 function isValidPermission(key) {
   return Object.prototype.hasOwnProperty.call(PERMISSION_META, key);
@@ -250,6 +317,8 @@ module.exports = {
   PERMISSION_GROUPS,
   ALL_PERMISSIONS,
   PERMISSION_META,
+  PERMISSION_VERSION,
   isValidPermission,
   expandPermissions,
+  permissionsAddedAfter,
 };

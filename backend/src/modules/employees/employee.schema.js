@@ -1,7 +1,15 @@
 "use strict";
 
 const { z } = require("zod");
-const { objectId, dateString, listQuery } = require("../../core/validation/common");
+const {
+  objectId,
+  dateString,
+  listQuery,
+  nullableDateString,
+  nullableObjectId,
+  optionalInt,
+  optionalNumber,
+} = require("../../core/validation/common");
 
 const AddressSchema = z.object({
   line1: z.string().max(120).optional(),
@@ -27,7 +35,7 @@ const PersonalSchema = z.object({
   lastName: z.string().max(60).optional(),
   displayName: z.string().max(120).optional(),
   gender: z.enum(["male", "female", "other", "undisclosed"]).optional(),
-  dateOfBirth: dateString().nullable().optional(),
+  dateOfBirth: nullableDateString(),
   bloodGroup: z.string().max(10).optional(),
   maritalStatus: z.enum(["single", "married", "divorced", "widowed", "undisclosed"]).optional(),
   nationality: z.string().max(60).optional(),
@@ -45,23 +53,23 @@ const PersonalSchema = z.object({
 });
 
 const EmploymentSchema = z.object({
-  departmentId: objectId().nullable().optional(),
-  designationId: objectId().nullable().optional(),
-  locationId: objectId().nullable().optional(),
-  managerId: objectId().nullable().optional(),
+  departmentId: nullableObjectId(),
+  designationId: nullableObjectId(),
+  locationId: nullableObjectId(),
+  managerId: nullableObjectId(),
   employmentType: z
     .enum(["full_time", "part_time", "contract", "intern", "consultant", "temporary"])
     .optional(),
   workMode: z.enum(["on_site", "remote", "hybrid"]).optional(),
-  joiningDate: dateString().nullable().optional(),
-  confirmationDate: dateString().nullable().optional(),
-  probationMonths: z.number().int().min(0).max(36).nullable().optional(),
-  noticePeriodDays: z.number().int().min(0).max(365).nullable().optional(),
-  shiftId: objectId().nullable().optional(),
-  weeklyOffPolicyId: objectId().nullable().optional(),
-  attendancePolicyId: objectId().nullable().optional(),
-  leavePolicyId: objectId().nullable().optional(),
-  holidayCalendarId: objectId().nullable().optional(),
+  joiningDate: nullableDateString(),
+  confirmationDate: nullableDateString(),
+  probationMonths: optionalInt(0, 36),
+  noticePeriodDays: optionalInt(0, 365),
+  shiftId: nullableObjectId(),
+  weeklyOffPolicyId: nullableObjectId(),
+  attendancePolicyId: nullableObjectId(),
+  leavePolicyId: nullableObjectId(),
+  holidayCalendarId: nullableObjectId(),
   isAttendanceExempt: z.boolean().optional(),
 });
 
@@ -91,10 +99,10 @@ const IdentityDocumentSchema = z.object({
   type: z.string().min(1).max(40),
   label: z.string().max(60).optional(),
   number: z.string().min(1).max(60),
-  issuedOn: dateString().nullable().optional(),
-  expiresOn: dateString().nullable().optional(),
+  issuedOn: nullableDateString(),
+  expiresOn: nullableDateString(),
   issuingAuthority: z.string().max(80).optional(),
-  fileId: objectId().nullable().optional(),
+  fileId: nullableObjectId(),
 });
 
 const EducationSchema = z.object({
@@ -102,19 +110,19 @@ const EducationSchema = z.object({
   specialisation: z.string().max(80).optional(),
   institution: z.string().max(120).optional(),
   board: z.string().max(80).optional(),
-  yearOfCompletion: z.number().int().min(1950).max(2100).nullable().optional(),
+  yearOfCompletion: optionalInt(1950, 2100),
   grade: z.string().max(20).optional(),
-  fileId: objectId().nullable().optional(),
+  fileId: nullableObjectId(),
 });
 
 const ExperienceSchema = z.object({
   company: z.string().min(1).max(120),
   designation: z.string().max(80).optional(),
-  from: dateString().nullable().optional(),
-  to: dateString().nullable().optional(),
-  lastDrawnSalary: z.number().min(0).nullable().optional(),
+  from: nullableDateString(),
+  to: nullableDateString(),
+  lastDrawnSalary: optionalNumber(0),
   reasonForLeaving: z.string().max(200).optional(),
-  fileId: objectId().nullable().optional(),
+  fileId: nullableObjectId(),
 });
 
 const CreateEmployeeSchema = z.object({
@@ -158,8 +166,8 @@ const ChangeStatusSchema = z.object({
   reason: z.string().max(500).optional(),
   exit: z
     .object({
-      resignationDate: dateString().nullable().optional(),
-      lastWorkingDay: dateString().nullable().optional(),
+      resignationDate: nullableDateString(),
+      lastWorkingDay: nullableDateString(),
       exitType: z
         .enum(["resignation", "termination", "retirement", "end_of_contract", "absconded", ""])
         .optional(),

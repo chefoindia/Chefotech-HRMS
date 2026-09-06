@@ -9,6 +9,7 @@ import {
 } from "react";
 import * as SecureStore from "expo-secure-store";
 import { api, ApiError, onSignedOut, tokens } from "../api/client";
+import { registerForPush, unregisterPush } from "../notifications/push";
 
 /**
  * Who is signed in, and what they may do.
@@ -48,11 +49,16 @@ interface SessionValue {
   loading: boolean;
   /** True once the first load has settled, so the router can stop waiting. */
   ready: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  /** Resolves to a challenge when the account has two-factor on; otherwise the session is set. */
+  signIn: (email: string, password: string) => Promise<SignInOutcome>;
+  /** Second step: the code from the authenticator app or a recovery code. */
+  completeMfa: (mfaToken: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   can: (...permissions: string[]) => boolean;
 }
+
+export type SignInOutcome = { mfaRequired: true; mfaToken: string } | { mfaRequired: false };
 
 const SessionContext = createContext<SessionValue | null>(null);
 
@@ -83,6 +89,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await api.get<Session>("/auth/me");
       setSession(data);
+      // Re-register on every launch: Expo tokens can rotate, and the server
+      // prunes devices that stop responding. Never prompts — only registers
+      // if permission was already granted from Settings.
+      registerForPush().catch(() => undefined);
     } catch (error) {
       // An expired session is expected and already handled by the client; a
       // network failure is not a reason to throw someone out of the app, so
@@ -104,34 +114,62 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // The client signs out on an unrecoverable 401; the UI has to follow.
   useEffect(() => onSignedOut(() => setSession(null)), []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post<{
-      mode: string;
-      accessToken?: string;
-      refreshToken?: string;
-      session?: Session;
-    }>("/auth/login", { email, password }, { skipAuth: true });
+  const adopt = useCallback(
+    async (data: { mode: string; accessToken?: string; refreshToken?: string; mfaToken?: string; session?: Session } | null): Promise<SignInOutcome> => {
+      if (data?.mode === "mfa_required" && data.mfaToken) {
+        return { mfaRequired: true, mfaToken: data.mfaToken };
+      }
 
-    if (!data?.accessToken) {
-      // Multi-workspace accounts and platform staff take other paths on the
-      // web. Neither belongs in an employee app, and pretending otherwise
-      // would strand the user on a blank screen.
-      throw new ApiError(
-        data?.mode === "select_organization"
-          ? "This account belongs to more than one workspace. Please use the web portal to sign in."
-          : "This account cannot sign in to the employee app.",
-        { code: "UNSUPPORTED_LOGIN_MODE" }
+      if (!data?.accessToken) {
+        // Multi-workspace accounts and platform staff take other paths on the
+        // web. Neither belongs in an employee app, and pretending otherwise
+        // would strand the user on a blank screen.
+        throw new ApiError(
+          data?.mode === "select_organization"
+            ? "This account belongs to more than one workspace. Please use the web portal to sign in."
+            : "This account cannot sign in to the employee app.",
+          { code: "UNSUPPORTED_LOGIN_MODE" }
+        );
+      }
+
+      await tokens.set(data.accessToken, data.refreshToken);
+      const me = data.session ?? (await api.get<Session>("/auth/me")).data;
+      setSession(me);
+      registerForPush().catch(() => undefined);
+      return { mfaRequired: false };
+    },
+    []
+  );
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const { data } = await api.post<{ mode: string; accessToken?: string; refreshToken?: string; mfaToken?: string; session?: Session }>(
+        "/auth/login",
+        { email, password },
+        { skipAuth: true }
       );
-    }
+      return adopt(data);
+    },
+    [adopt]
+  );
 
-    await tokens.set(data.accessToken, data.refreshToken);
-    const me = data.session ?? (await api.get<Session>("/auth/me")).data;
-    setSession(me);
-  }, []);
+  const completeMfa = useCallback(
+    async (mfaToken: string, code: string) => {
+      const { data } = await api.post<{ mode: string; accessToken?: string; refreshToken?: string; session?: Session }>(
+        "/auth/mfa/verify",
+        { mfaToken, token: code },
+        { skipAuth: true }
+      );
+      await adopt(data);
+    },
+    [adopt]
+  );
 
   const signOut = useCallback(async () => {
     // Best effort: the local session must end even if the server is
     // unreachable, or a user on a plane can never sign out of a lost phone.
+    // The push token goes first, while the access token still works.
+    await unregisterPush().catch(() => undefined);
     await api.post("/auth/logout").catch(() => undefined);
     await tokens.clear();
     setSession(null);
@@ -146,8 +184,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<SessionValue>(
-    () => ({ session, loading, ready, signIn, signOut, refresh: load, can }),
-    [session, loading, ready, signIn, signOut, load, can]
+    () => ({ session, loading, ready, signIn, completeMfa, signOut, refresh: load, can }),
+    [session, loading, ready, signIn, completeMfa, signOut, load, can]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

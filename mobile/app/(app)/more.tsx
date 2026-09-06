@@ -115,6 +115,55 @@ export default function More() {
           />
           <Divider />
           <Row
+            icon="clipboard-outline"
+            title="Requests"
+            subtitle="Work from home, comp-off, advances"
+            onPress={() => router.push("/(app)/requests")}
+          />
+          <Divider />
+          <Row
+            icon="receipt-outline"
+            title="Expenses"
+            subtitle="Claim what you spent for work"
+            onPress={() => router.push("/(app)/expenses")}
+          />
+          <Divider />
+          <Row
+            icon="cash-outline"
+            title="Loans and advances"
+            subtitle="Ask, and follow the repayments"
+            onPress={() => router.push("/(app)/loans")}
+          />
+          <Divider />
+          <Row
+            icon="laptop-outline"
+            title="My assets"
+            subtitle="Equipment in your care"
+            onPress={() => router.push("/(app)/assets")}
+          />
+          <Divider />
+          <Row
+            icon="help-buoy-outline"
+            title="Help desk"
+            subtitle="Raise a ticket with IT, HR or payroll"
+            onPress={() => router.push("/(app)/tickets")}
+          />
+          <Divider />
+          <Row
+            icon="flag-outline"
+            title="My performance"
+            subtitle="Goals and reviews"
+            onPress={() => router.push("/(app)/performance")}
+          />
+          <Divider />
+          <Row
+            icon="chatbubbles-outline"
+            title="Surveys"
+            subtitle="Questions from HR, a couple of minutes each"
+            onPress={() => router.push("/(app)/surveys")}
+          />
+          <Divider />
+          <Row
             icon="notifications-outline"
             title="Notifications"
             subtitle={unread.data ? `${unread.data} unread` : "Everything you have been sent"}

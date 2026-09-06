@@ -194,7 +194,7 @@ async function assign({ employeeIds, shiftId, fromDate, toDate, reason }, req) {
   if (fromDate > toDate) throw AppError.badRequest("The start date must be on or before the end date.");
 
   const employees = await Employee.find({ _id: { $in: employeeIds } })
-    .select("employeeCode")
+    .select("employeeCode userId personal.firstName personal.lastName personal.workEmail")
     .lean();
   if (employees.length !== employeeIds.length) {
     throw AppError.badRequest("One or more of the selected employees do not exist.");
@@ -231,6 +231,25 @@ async function assign({ employeeIds, shiftId, fromDate, toDate, reason }, req) {
     },
     req
   );
+
+  // A roster change nobody is told about is a day of absences waiting to be
+  // disputed. Everyone with an account is told which shift, and when.
+  try {
+    const notifications = require("../notifications/notification.service");
+    const recipients = require("../notifications/recipients");
+    await notifications.notify({
+      template: "shift_assigned",
+      recipients: employees.map(recipients.employeeToRecipient),
+      organization: await recipients.organization(),
+      data: {
+        shift: { name: shift.name, startTime: shift.startTime, endTime: shift.endTime, from: fromDate, to: toDate },
+      },
+      entity: { type: "ShiftAssignment", id: null },
+    });
+  } catch (err) {
+    const { logger } = require("../../config/logger");
+    logger.warn({ err }, "Shift-assigned notification failed");
+  }
 
   return { assigned: created.length, shift: shift.name, fromDate, toDate };
 }

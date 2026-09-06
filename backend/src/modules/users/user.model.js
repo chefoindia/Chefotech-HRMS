@@ -94,8 +94,22 @@ const userSchema = createGlobalSchema({
   invitationTokenHash: { type: String, default: null, select: false },
   invitationExpiresAt: { type: Date, default: null, select: false },
 
+  // ── Two-factor authentication ──────────────────────────────────────────
+  // The TOTP secret is stored encrypted (secretBox) and never selected by
+  // default. A pending secret exists only between "show me the QR" and the
+  // first correct code; recovery codes are stored hashed, one use each.
   mfaEnabled: { type: Boolean, default: false },
+  mfaEnabledAt: { type: Date, default: null },
   mfaSecret: { type: String, default: null, select: false },
+  mfaPendingSecret: { type: String, default: null, select: false },
+  mfaRecoveryCodes: {
+    type: [{ hash: { type: String, required: true }, usedAt: { type: Date, default: null } }],
+    default: [],
+    select: false,
+  },
+  // The last accepted TOTP step, so one code cannot be replayed inside the drift window.
+  mfaLastCounter: { type: Number, default: null },
+  mfaFailedAttempts: { type: Number, default: 0, select: false },
 
   deletedAt: { type: Date, default: null },
 });

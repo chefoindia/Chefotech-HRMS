@@ -16,12 +16,21 @@ async function start() {
 
   await connectDB();
 
+  // Permissions added since a tenant's roles were seeded are granted to the
+  // system roles that would have had them, so a new capability reaches every
+  // existing organization without a migration anyone has to remember to run.
+  await require("./modules/rbac/rbac.service")
+    .syncSystemRolePermissions()
+    .catch((err) => logger.error({ err }, "Could not reconcile role permissions"));
+
   const app = createApp();
   const server = http.createServer(app);
 
   realtime.attach(server);
 
   registerJobs();
+  // Outbound webhooks listen to every event the notification pipeline emits.
+  require("./modules/integrations/integration.service").subscribe();
   queue.start();
   schedules.start();
 

@@ -47,6 +47,50 @@ function invalidateOrganizationCache(organizationId) {
 function authenticate(options = {}) {
   return async function authenticateMiddleware(req, res, next) {
     try {
+      // ── Machine callers: an API key instead of a session ────────────────
+      // The key carries a subset of its creator's permissions and is scoped
+      // to one organization, so everything below the tenant check is the
+      // same as for a person.
+      const apiKey = req.headers["x-api-key"];
+      if (apiKey && !options.optional) {
+        const integrations = require("../integrations/integration.service");
+        const key = await integrations.resolveApiKey(String(apiKey), req.ip);
+        if (!key) throw new AppError("UNAUTHENTICATED", { message: "This API key is not valid, has expired, or was revoked." });
+
+        const organization = await loadOrganization(key.organizationId);
+        if (!organization || organization.deletedAt) throw new AppError("UNAUTHENTICATED");
+        if (organization.status === "suspended" || organization.status === "cancelled") throw new AppError("ORGANIZATION_SUSPENDED");
+
+        req.auth = {
+          userId: String(key.createdBy),
+          email: null,
+          name: `API key: ${key.name}`,
+          firstName: key.name,
+          isPlatformUser: false,
+          isApiKey: true,
+          apiKeyId: String(key._id),
+          organizationId: String(organization._id),
+          organization: {
+            id: String(organization._id),
+            name: organization.name,
+            slug: organization.slug,
+            timezone: organization.timezone,
+            currency: organization.currency,
+            status: organization.status,
+            plan: organization.plan,
+            featureOverrides: organization.featureOverrides,
+            storageFolderName: `${organization.slug}-${String(organization._id).slice(-6)}`,
+          },
+          membershipId: null,
+          employeeId: null,
+          permissions: key.scopes || [],
+          roles: [],
+          isOwner: false,
+          isManager: false,
+        };
+        return tenant.runWithTenant(organization._id, () => next(), { userId: String(key.createdBy), requestId: req.id }).catch(next);
+      }
+
       const token = tokens.extractToken(req);
 
       if (!token) {
@@ -102,6 +146,14 @@ function authenticate(options = {}) {
             "This organization is suspended. Please contact support.",
         });
       }
+
+      // The organization's IP allowlist, on every request rather than only
+      // at sign-in: a session that started in the office must not keep
+      // working from a café. Reads through the settings cache, so it costs
+      // nothing measurable. Only tenant users are subject to it.
+      await tenant.runWithTenant(organizationId, () =>
+        require("./security.service").assertIpAllowed(organizationId, req.ip)
+      );
 
       // Membership is re-checked on every request, not trusted from the token.
       // Removing someone from an organization takes effect immediately.

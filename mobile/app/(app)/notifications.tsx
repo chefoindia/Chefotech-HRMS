@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { formatDistanceToNow } from "date-fns";
 import { useMarkNotificationRead, useNotifications } from "../../src/api/hooks";
+import { routeForActionUrl } from "../../src/notifications/deepLink";
 import { useColors } from "../../src/theme/ThemeProvider";
 import { Card, EmptyState, ErrorState, Loading, Screen, Txt } from "../../src/components/ui";
 import { radius, spacing } from "../../src/theme";
@@ -22,17 +23,12 @@ export default function NotificationsScreen() {
   const query = useNotifications();
   const markRead = useMarkNotificationRead();
 
-  /**
-   * Deep links arrive as WEB routes ("/me/leave") because one backend serves
-   * both clients. Mapping them here keeps that knowledge in one place rather
-   * than asking the server to know which client it is talking to.
-   */
+  // Web routes are mapped to screens in one place (src/notifications/deepLink)
+  // so a tap here and a tap on a push notification agree.
   const openFor = (actionUrl?: string | null) => {
     if (!actionUrl) return;
-    if (actionUrl.includes("/leave")) return router.push("/(app)/leave");
-    if (actionUrl.includes("/attendance")) return router.push("/(app)/attendance");
-    if (actionUrl.includes("/payslip")) return router.push("/(app)/payslips");
-    if (actionUrl.includes("/documents")) return router.push("/(app)/documents");
+    const target = routeForActionUrl(actionUrl);
+    if (target !== "/(app)/notifications") router.push(target);
   };
 
   return (

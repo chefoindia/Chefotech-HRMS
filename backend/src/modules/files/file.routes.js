@@ -71,6 +71,15 @@ async function assertCanRead(file, auth) {
       // Branding and company-wide documents: any member may read them.
       return;
 
+    case "OrganizationExport":
+      // The whole tenant in one zip: only whoever can change settings.
+      if (permissions.includes("settings.manage")) return;
+      break;
+
+    case "SheetSchedule":
+      if (permissions.includes("report.export")) return;
+      break;
+
     default:
       if (permissions.includes("document.view")) return;
       break;

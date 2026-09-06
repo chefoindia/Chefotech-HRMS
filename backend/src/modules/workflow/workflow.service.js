@@ -329,6 +329,33 @@ function humanEntityType(entityType) {
   return String(entityType).replace(/_/g, " ");
 }
 
+async function notifyRequester(instance, outcome, reason) {
+  const recipients = require("../notifications/recipients");
+  let audience = [];
+  if (instance.requesterEmployeeId) audience = await recipients.employees([instance.requesterEmployeeId]);
+  if (!audience.length && instance.requesterUserId) {
+    const User = require("../users/user.model");
+    const user = await User.findById(instance.requesterUserId).select("email firstName lastName").lean();
+    if (user) audience = [recipients.userToRecipient(user)];
+  }
+  if (!audience.length) return;
+
+  await notifications.notify({
+    template: outcome === "approved" ? "request_approved" : "request_rejected",
+    recipients: audience,
+    organization: await recipients.organization(),
+    data: {
+      request: {
+        type: humanEntityType(instance.entityType),
+        label: instance.entityLabel || "",
+        reasonNote: reason ? ` Reason: ${reason}` : "",
+      },
+    },
+    severity: outcome === "approved" ? "success" : "warning",
+    entity: { type: "WorkflowInstance", id: instance._id },
+  });
+}
+
 function urlFor(instance) {
   const routes = {
     leave_request: "/app/approvals",
@@ -417,6 +444,16 @@ async function complete(instance, outcome, reason, req) {
         "Workflow completion handler failed"
       );
     }
+  }
+
+  // The person who raised it hears the outcome. Leave and attendance
+  // corrections already send their own, more specific message from their
+  // completion handlers, so they are excluded here rather than told twice.
+  const tellsOwnStory = ["leave_request", "attendance_correction"].includes(instance.entityType);
+  if (["approved", "rejected"].includes(outcome) && !tellsOwnStory) {
+    notifyRequester(instance, outcome, reason).catch((err) =>
+      logger.warn({ err, instance: String(instance._id) }, "Requester notification failed")
+    );
   }
 
   await audit.record(

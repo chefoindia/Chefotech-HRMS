@@ -50,7 +50,26 @@ const VerifyEmailSchema = z.object({ token: z.string().min(10) });
 
 const SwitchOrganizationSchema = z.object({ organizationId: objectId() });
 
+/** A six-digit app code, or a recovery code ("ABCDE-FGHJK"). */
+const secondFactor = () => z.string().trim().min(6, "Enter the code").max(16);
+
+const MfaVerifySchema = z.object({
+  mfaToken: z.string().min(10),
+  token: secondFactor(),
+  organizationId: objectId().optional(),
+});
+
+const MfaEnableSchema = z.object({ token: secondFactor() });
+
+const MfaDisableSchema = z.object({
+  password: z.string().min(1, "Enter your password").max(128),
+  token: secondFactor(),
+});
+
 module.exports = {
+  MfaVerifySchema,
+  MfaEnableSchema,
+  MfaDisableSchema,
   RegisterSchema,
   LoginSchema,
   RefreshSchema,

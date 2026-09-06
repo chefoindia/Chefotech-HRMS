@@ -23,6 +23,9 @@ const ErrorCodes = {
   ACCOUNT_DISABLED: { status: 403, message: "This account has been disabled." },
   EMAIL_NOT_VERIFIED: { status: 403, message: "Please verify your email address to continue." },
   INVALID_TOKEN: { status: 400, message: "This link is invalid or has already been used." },
+  MFA_INVALID: { status: 401, message: "That code is not right. Check your authenticator app and try again." },
+  SESSION_IDLE: { status: 401, message: "You were signed out after a period of inactivity. Please sign in again." },
+  IP_NOT_ALLOWED: { status: 403, message: "Sign-in is not allowed from this network. Contact your administrator." },
 
   // authorization and tenancy
   FORBIDDEN: { status: 403, message: "You do not have permission to perform this action." },

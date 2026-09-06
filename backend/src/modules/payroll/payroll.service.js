@@ -343,8 +343,13 @@ async function processRun(runId, req) {
   const structureById = Object.fromEntries(structures.map((s) => [String(s._id), s]));
   const componentById = Object.fromEntries(allComponents.map((c) => [String(c._id), c]));
 
-  // Wipe previous items so a re-run cannot leave stale rows behind.
+  // Wipe previous items so a re-run cannot leave stale rows behind, and hand
+  // back whatever inputs (loan instalments, reimbursements) the previous
+  // attempt consumed, so they are applied exactly once.
   await PayrollItem.deleteMany({ runId: run._id });
+  const inputs = require("./inputs.service");
+  await inputs.releaseRun(run._id);
+  const periodKey = `${period.year}-${String(period.month).padStart(2, "0")}`;
 
   const totals = {
     employeeCount: 0,
@@ -392,13 +397,25 @@ async function processRun(runId, req) {
         period.attendanceTo
       );
 
+      // Everything other modules have queued for this person: loan
+      // instalments, approved claims, encashments, bonuses.
+      const queued = await inputs.pendingFor(employee._id, periodKey);
+      const adjustments = queued.map((q) => ({
+        label: q.label,
+        type: q.type,
+        amount: q.amount,
+        reason: q.reason || (q.source && q.source.type !== "manual" ? `${q.source.type}${q.source.reference ? ` ${q.source.reference}` : ""}` : ""),
+        addedBy: q.createdBy || null,
+        addedAt: q.createdAt,
+      }));
+
       const calculated = engine.calculate({
         employee,
         salary,
         components,
         attendance,
         settings,
-        adjustments: [],
+        adjustments,
       });
 
       if (attendance.noAttendanceData) {
@@ -434,9 +451,12 @@ async function processRun(runId, req) {
         net: calculated.net,
         ctc: calculated.ctc,
         breakdown: calculated.breakdown,
+        adjustments,
         status: calculated.errors.length ? "error" : "calculated",
         error: calculated.errors.length ? calculated.errors.map((e) => `${e.component}: ${e.message}`).join("; ") : null,
       });
+
+      await inputs.markApplied(queued.map((q) => q._id), { runId: run._id, itemId: item._id });
 
       totals.employeeCount += 1;
       totals.grossTotal += item.gross;
@@ -487,7 +507,41 @@ async function processRun(runId, req) {
     "Payroll run processed"
   );
 
+  // "payroll.completed" was a template, a default rule, and nothing that ever
+  // raised it. Whoever can approve the run is told; rules add the rest.
+  try {
+    const recipients = require("../notifications/recipients");
+    const organization = await recipients.organization();
+    await notifications.notify({
+      template: "payroll_completed",
+      recipients: await recipients.usersWithPermission(["payroll.approve", "payroll.process"]),
+      organization,
+      data: {
+        period: { label: period.name },
+        run: {
+          id: String(run._id),
+          employeeCount: totals.employeeCount,
+          netTotal: formatMoney(run.totals.netTotal, organization),
+          exceptionsNote: errors.length
+            ? ` ${errors.length} employee(s) could not be calculated and need attention before approval.`
+            : "",
+        },
+      },
+      severity: errors.length ? "warning" : "success",
+      entity: { type: "PayrollRun", id: run._id },
+    });
+  } catch (err) {
+    logger.warn({ err }, "Payroll-completed notification failed");
+  }
+
   return run;
+}
+
+function formatMoney(amount, organization) {
+  const symbol = (organization && organization.currencySymbol) || "";
+  return `${symbol}${new Intl.NumberFormat((organization && organization.locale) || "en-IN", {
+    maximumFractionDigits: 0,
+  }).format(amount || 0)}`;
 }
 
 /** Add a one-off earning or deduction to one employee's payroll. */
@@ -599,6 +653,23 @@ async function approveRun(runId, req) {
     },
     req
   );
+
+  try {
+    const recipients = require("../notifications/recipients");
+    const period = await PayrollPeriod.findById(run.periodId).select("name").lean();
+    await notifications.notify({
+      template: "payroll_run_approved",
+      recipients: await recipients.usersWithPermission(["payroll.publish_payslips", "payroll.process"]),
+      organization: await recipients.organization(),
+      data: {
+        period: { label: period ? period.name : `Run ${run.runNumber}` },
+        approver: { name: (req && req.auth && req.auth.name) || "An approver" },
+      },
+      entity: { type: "PayrollRun", id: run._id },
+    });
+  } catch (err) {
+    logger.warn({ err }, "Payroll-approved notification failed");
+  }
 
   return run;
 }

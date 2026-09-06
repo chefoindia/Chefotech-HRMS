@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check } from "lucide-react";
 import { api } from "@/lib/api";
@@ -23,6 +24,8 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const panelRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const centreHref = pathname.startsWith("/me") ? "/me/notifications" : "/app/notifications";
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["notifications", "unread"],
@@ -170,6 +173,14 @@ export function NotificationBell() {
               })
             )}
           </div>
+
+          <Link
+            href={centreHref}
+            onClick={() => setOpen(false)}
+            className="block border-t px-4 py-2.5 text-center text-[12.5px] font-medium text-brand-600 hover:bg-[var(--surface-muted)]"
+          >
+            View all notifications
+          </Link>
         </div>
       )}
     </div>

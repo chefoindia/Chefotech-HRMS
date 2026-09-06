@@ -38,7 +38,7 @@ function getTransport() {
 }
 
 /** Minimal, safe HTML wrapper honouring the organization's brand colour. */
-function wrapHtml({ title, body, branding = {}, companyName }) {
+function wrapHtml({ title, body, branding = {}, companyName, actionUrl = null, actionLabel = "Open" }) {
   const accent = branding.emailHeaderColor || branding.primaryColor || "#4F46E5";
   const logo = branding.logoUrl
     ? `<img src="${escapeHtml(branding.logoUrl)}" alt="${escapeHtml(companyName || "")}" style="max-height:40px;max-width:180px" />`
@@ -57,6 +57,12 @@ function wrapHtml({ title, body, branding = {}, companyName }) {
       <tr><td style="padding:28px 24px">
         <h1 style="margin:0 0 16px;font-size:19px;color:#0f172a">${escapeHtml(title || "")}</h1>
         ${paragraphs}
+        ${
+          actionUrl
+            ? `<p style="margin:24px 0 8px"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:${escapeHtml(accent)};color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 20px;border-radius:8px">${escapeHtml(actionLabel || "Open")}</a></p>
+        <p style="margin:0;font-size:12px;color:#94a3b8;word-break:break-all">${escapeHtml(actionUrl)}</p>`
+            : ""
+        }
       </td></tr>
       <tr><td style="padding:16px 24px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px">
         ${escapeHtml(branding.emailFooterText || "")}
@@ -96,7 +102,7 @@ function recipientList(to) {
     .filter((entry) => entry.email);
 }
 
-async function sendViaBrevo({ to, subject, text, html, replyTo }) {
+async function sendViaBrevo({ to, subject, text, html, replyTo, attachments }) {
   const apiKey = env.mail.brevo.apiKey;
   if (!apiKey) {
     throw new AppError("MAIL_ERROR", {
@@ -112,6 +118,9 @@ async function sendViaBrevo({ to, subject, text, html, replyTo }) {
     textContent: text || undefined,
   };
   if (replyTo) payload.replyTo = parseAddress(replyTo);
+  if (attachments && attachments.length) {
+    payload.attachment = attachments.map((a) => ({ name: a.filename, content: Buffer.from(a.content).toString("base64") }));
+  }
 
   const response = await fetch(BREVO_ENDPOINT, {
     method: "POST",
@@ -145,7 +154,7 @@ async function sendViaSmtp(message) {
   return { delivered: true, messageId: info.messageId };
 }
 
-async function send({ to, subject, text, html, replyTo }) {
+async function send({ to, subject, text, html, replyTo, attachments }) {
   const message = {
     from: env.mail.from,
     to,
@@ -153,6 +162,9 @@ async function send({ to, subject, text, html, replyTo }) {
     text,
     html,
     replyTo,
+    // [{ filename, content: Buffer, contentType }] — the nodemailer shape;
+    // the Brevo transport converts to its own.
+    attachments: attachments && attachments.length ? attachments : undefined,
   };
 
   if (!env.mail.enabled) {

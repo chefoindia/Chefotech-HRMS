@@ -12,7 +12,12 @@ const { createTenantSchema } = require("../tenancy/baseSchema");
  * context — to a provider id.
  */
 const storedFileSchema = createTenantSchema({
-  provider: { type: String, enum: ["drive", "local"], required: true },
+  // Every provider in storage.service's PROVIDERS map. This list was missing
+  // cloudinary and firebase, so an upload routed to either failed Mongoose
+  // validation on the registry row AFTER the bytes had been stored — every
+  // avatar, logo and document upload on a Firebase-backed deployment
+  // returned a 500, with an orphaned file left behind each time.
+  provider: { type: String, enum: ["drive", "local", "cloudinary", "firebase"], required: true },
   providerId: { type: String, required: true },
 
   fileName: { type: String, required: true },

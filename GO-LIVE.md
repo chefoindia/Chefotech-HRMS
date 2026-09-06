@@ -13,11 +13,53 @@ taking my word for it.
 
 | | Status |
 |---|---|
-| Backend API | Works. 178 tests pass. |
-| Web portal + marketing site | Works. Builds, 104 pages, all routes serve. |
-| Employee mobile app | Type-checks and bundles for Android and iOS. **Never run on a device.** |
+| Backend API | Works. 376 tests pass (`cd backend && npm test`), including the new integration suites for documents, sheets, security, requests, help desk, expenses, assets, loans, onboarding, exits, scheduled sheets, data export, API keys, webhooks, surveys and performance. |
+| Web portal + marketing site | Works. Type-checks clean (`cd frontend && npx tsc --noEmit`). |
+| Employee mobile app | Type-checks clean. Requests, help desk, expenses, assets, loans, surveys and performance screens added; two-factor sign-in supported. **Still never run on a physical device.** |
 | Known security advisories | None. |
-| Version control | Git initialised, secrets excluded. |
+| Version control | Git initialised, secrets excluded (`backend/.env`, `.storage/`, keystores). |
+
+### What the September 2026 QC pass added
+
+Everything below is built, wired into permissions, notifications, audit and
+the scheduler, and covered by an integration test. The configuration each one
+needs is in **Must do** item 7.
+
+- **Mail and notifications** — every event goes through one pipeline
+  (in-app, email, mobile push, web push) with per-organization rules, a mail
+  log with resend, a daily digest, calendar-driven reminders, and email
+  attachments (used by scheduled sheets and the data export).
+- **Documents people design themselves** — templates with blocks, versions,
+  numbering, verification QR codes and a public verify page; starter
+  templates for offer, appointment, confirmation, promotion, transfer,
+  relieving, experience, warning, increment, NOC, address proof, bonafide,
+  full-and-final settlement; bulk generation to a zip; employee uploads with
+  review, expiry and acknowledgement; company documents; document requests.
+- **Sheets people design themselves** — column-by-column spreadsheets over
+  employees, attendance (daily, monthly, muster), leave, payroll registers,
+  payslips and joiners/leavers, with formulas, grouping, totals, XLSX/CSV/PDF
+  output, and **schedules** that email a sheet to anyone on a daily, weekly or
+  monthly rhythm.
+- **Security** — TOTP two-factor with recovery codes, enforced for
+  administrators when the organization says so; IP allow-lists with a
+  self-lockout guard; password policy and expiry; idle timeout; session list
+  and "sign out everywhere"; admin session revocation and 2FA reset.
+- **Employee requests hub** — work from home, comp-off, encashment, shift
+  swap, letters, profile changes, advances — each with its own effect once
+  approved, optionally routed through the workflow engine.
+- **Help desk** with SLAs, auto-assignment, internal notes and ratings.
+- **Expenses, assets, loans** — all three reach payroll through one
+  "payroll inputs" mechanism, verified by a real payroll run in the tests.
+- **Onboarding and exits** — checklists that start themselves, tasks that
+  complete themselves, clearance, settlement, relieving and experience
+  letters on completion.
+- **Employee movements** — promotions, transfers and confirmations that
+  apply on their effective date, with the letter generated automatically.
+- **Directory, duplicates, bulk actions, holiday calendar feed (ICS).**
+- **API keys and signed webhooks** for other systems, with a settings page.
+- **Organization data export** — a zip of every collection as JSON.
+- **Surveys** (anonymous by default) and **performance** (goals, review
+  cycles with self and manager reviews, calibration summary).
 
 ---
 
@@ -101,6 +143,24 @@ something is wrong.
 cd mobile && npm start      # then scan the QR with Expo Go
 ```
 
+### 7. Configure what the new modules depend on
+
+All of these have safe defaults, but the feature is silently reduced until
+the value is set. Each is documented in `backend/.env.example`.
+
+| Setting | Without it |
+|---|---|
+| `MAIL_ENABLED=true` + `BREVO_API_KEY` (or SMTP) | No email at all. In production the server refuses to pretend, and the mail log shows the failure. |
+| `MAIL_REPLY_TO` | Replies to system mail go to the sender address, which nobody reads. |
+| `JOBS_ENABLED=true` | Nothing scheduled runs: no attendance finalisation, no reminders, no scheduled sheets, no webhook deliveries, no data exports, no survey auto-close. Set it on exactly one instance, or on all if the queue is shared (it is safe either way; jobs are claimed atomically). |
+| `EXPO_ACCESS_TOKEN` | Mobile push still works through Expo's public endpoint, but is rate-limited more tightly. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | No browser push. Generate once: `npx web-push generate-vapid-keys`. |
+| `PUBLIC_APP_URL` | Verification QR codes on generated documents point at localhost. |
+| An organization's **Security** settings | Two-factor is optional, no IP restrictions, no password expiry. Enforce 2FA for administrators before real payroll data goes in. |
+
+Rotate any secret that was ever pasted into a chat or a ticket, including the
+development `BREVO_API_KEY` and Firebase key in `backend/.env`.
+
 ---
 
 ## Should do before selling
@@ -118,12 +178,21 @@ The SLA commits to daily backups, a 24-hour recovery point and tested
 restores. Nothing currently performs a backup. Either build it or amend the
 SLA before a customer signs it.
 
-### Push notifications
+### Push notifications — now built, not yet seen on a device
 
-The mobile app has the permission flow and a settings toggle, but nothing
-registers a device token and the backend has no push transport. Notifications
-today are in-app and email. The switch is honest about what it does; it just
-does less than a customer might assume from the word "notifications".
+The mobile app registers its Expo push token on sign-in and the backend
+delivers through Expo's push service with receipt checking; the web portal
+registers a browser subscription and the backend delivers through Web Push
+(VAPID). Both are tested against the transport's contract, not against a real
+phone or browser. Send yourself one from **Settings → Notifications → Send a
+test** on a real device before telling a customer it works.
+
+### Webhook receivers and API keys are the customer's responsibility
+
+A leaked API key carries only the permissions it was created with and can be
+revoked in one click, and webhook secrets can be rotated. But there is no
+outbound IP allow-list and no per-key rate limit yet. If a customer asks for
+either, that is a day's work, not a redesign.
 
 ---
 

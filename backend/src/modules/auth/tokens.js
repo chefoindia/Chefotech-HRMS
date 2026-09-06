@@ -94,6 +94,9 @@ function extractToken(req) {
 
 function extractRefreshToken(req) {
   if (req.body && req.body.refreshToken) return req.body.refreshToken;
+  // GET requests (the sessions list) cannot carry a body; a header is the
+  // same secret over the same TLS channel.
+  if (req.headers && req.headers["x-refresh-token"]) return String(req.headers["x-refresh-token"]);
   if (req.cookies && req.cookies.hrms_refresh) return req.cookies.hrms_refresh;
   return null;
 }

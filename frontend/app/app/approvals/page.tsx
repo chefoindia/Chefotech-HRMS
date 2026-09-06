@@ -21,6 +21,10 @@ import {
   useToast,
 } from "@/components/ui";
 import type { LeaveRequest } from "@/lib/types";
+import type { EmployeeRequest, ExpenseClaim } from "@/lib/moduleTypes";
+import { DecisionDialog as ModuleDecisionDialog } from "@/components/modules/DecisionDialog";
+import { RequestRow } from "@/components/modules/RequestCard";
+import { ExpenseRow } from "@/components/modules/ExpenseRow";
 
 interface Correction {
   id: string;
@@ -41,12 +45,49 @@ interface Correction {
  * they are the same row type makes both worse.
  */
 export default function ApprovalsPage() {
-  const { session, can } = useSession();
+  const { session, can, canAny } = useSession();
   const locale = session?.organization?.locale || "en-IN";
+  const currency = session?.organization?.currency || "INR";
   const queryClient = useQueryClient();
   const toast = useToast();
 
   const [tab, setTab] = useState("leave");
+  const [decidingRequest, setDecidingRequest] = useState<{ request: EmployeeRequest; decision: "approve" | "reject" } | null>(null);
+  const [decidingExpense, setDecidingExpense] = useState<{ claim: ExpenseClaim; decision: "approve" | "reject" } | null>(null);
+
+  const pendingRequests = useQuery({
+    queryKey: ["approvals", "requests"],
+    queryFn: async () => (await api.get<EmployeeRequest[]>("/requests", { query: { scope: "to_approve", limit: 50 } })).data,
+    enabled: canAny("request.approve", "request.view"),
+  });
+
+  const pendingExpenses = useQuery({
+    queryKey: ["approvals", "expenses"],
+    queryFn: async () => (await api.get<ExpenseClaim[]>("/expenses", { query: { scope: "to_approve", limit: 50 } })).data,
+    enabled: can("expense.approve"),
+  });
+
+  const decideRequest = useMutation({
+    mutationFn: ({ id, decision, comment }: { id: string; decision: "approve" | "reject"; comment: string }) => api.post(`/requests/${id}/decide`, { decision, comment }),
+    onSuccess: (_, v) => {
+      toast.success(v.decision === "approve" ? "Approved" : "Rejected");
+      setDecidingRequest(null);
+      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+    },
+    onError: (error) => toast.fromError(error, "Could not record that decision."),
+  });
+
+  const decideExpense = useMutation({
+    mutationFn: ({ id, decision, comment, approvedTotal }: { id: string; decision: "approve" | "reject"; comment: string; approvedTotal?: number | null }) => api.post(`/expenses/${id}/decide`, { decision, comment, approvedTotal }),
+    onSuccess: (_, v) => {
+      toast.success(v.decision === "approve" ? "Approved" : "Rejected");
+      setDecidingExpense(null);
+      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+    },
+    onError: (error) => toast.fromError(error, "Could not record that decision."),
+  });
   const [reviewing, setReviewing] = useState<
     { kind: "leave" | "correction"; id: string; decision: "approve" | "reject"; label: string } | null
   >(null);
@@ -108,9 +149,11 @@ export default function ApprovalsPage() {
   const tabs = [
     { key: "leave", label: "Leave", count: leave.data?.length || 0 },
     { key: "corrections", label: "Attendance corrections", count: corrections.data?.length || 0 },
+    ...(canAny("request.approve", "request.view") ? [{ key: "requests", label: "Requests", count: pendingRequests.data?.length || 0 }] : []),
+    ...(canAny("expense.approve") ? [{ key: "expenses", label: "Expenses", count: pendingExpenses.data?.length || 0 }] : []),
   ];
 
-  const total = (leave.data?.length || 0) + (corrections.data?.length || 0);
+  const total = (leave.data?.length || 0) + (corrections.data?.length || 0) + (pendingRequests.data?.length || 0) + (pendingExpenses.data?.length || 0);
 
   return (
     <>
@@ -307,6 +350,91 @@ export default function ApprovalsPage() {
             </ul>
           )}
         </Card>
+      )}
+
+      {tab === "requests" && (
+        <Card padded={false}>
+          {pendingRequests.isLoading ? (
+            <div className="skeleton m-5 h-24" />
+          ) : !pendingRequests.data?.length ? (
+            <EmptyState title="No requests waiting" description="Work-from-home days, comp-offs, encashments and letters your team asks for appear here." />
+          ) : (
+            <ul className="divide-y">
+              {pendingRequests.data.map((request) => (
+                <RequestRow
+                  key={request.id}
+                  request={request}
+                  locale={locale}
+                  showEmployee
+                  actions={
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => setDecidingRequest({ request, decision: "reject" })}>
+                        Reject
+                      </Button>
+                      <Button size="sm" onClick={() => setDecidingRequest({ request, decision: "approve" })}>
+                        Approve
+                      </Button>
+                    </div>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      {tab === "expenses" && (
+        <Card padded={false}>
+          {pendingExpenses.isLoading ? (
+            <div className="skeleton m-5 h-24" />
+          ) : !pendingExpenses.data?.length ? (
+            <EmptyState title="No claims waiting" description="Expense claims from your team appear here once they are submitted." />
+          ) : (
+            <ul className="divide-y">
+              {pendingExpenses.data.map((claim) => (
+                <ExpenseRow
+                  key={claim.id}
+                  claim={claim}
+                  currency={currency}
+                  locale={locale}
+                  showEmployee
+                  expanded
+                  actions={
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => setDecidingExpense({ claim, decision: "reject" })}>
+                        Reject
+                      </Button>
+                      <Button size="sm" onClick={() => setDecidingExpense({ claim, decision: "approve" })}>
+                        Approve
+                      </Button>
+                    </div>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      {decidingRequest && (
+        <ModuleDecisionDialog
+          title={`${decidingRequest.decision === "approve" ? "Approve" : "Reject"}: ${decidingRequest.request.summary}`}
+          decision={decidingRequest.decision}
+          loading={decideRequest.isPending}
+          onClose={() => setDecidingRequest(null)}
+          onConfirm={(comment) => decideRequest.mutate({ id: decidingRequest.request.id, decision: decidingRequest.decision, comment })}
+        />
+      )}
+      {decidingExpense && (
+        <ModuleDecisionDialog
+          title={`${decidingExpense.decision === "approve" ? "Approve" : "Reject"} claim #${decidingExpense.claim.number}`}
+          decision={decidingExpense.decision}
+          loading={decideExpense.isPending}
+          amountLabel={decidingExpense.decision === "approve" ? "Amount to approve" : undefined}
+          amountDefault={decidingExpense.claim.total}
+          onClose={() => setDecidingExpense(null)}
+          onConfirm={(comment, amount) => decideExpense.mutate({ id: decidingExpense.claim.id, decision: decidingExpense.decision, comment, approvedTotal: amount })}
+        />
       )}
 
       {reviewing && (

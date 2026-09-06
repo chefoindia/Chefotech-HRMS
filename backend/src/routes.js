@@ -32,6 +32,17 @@ function buildRoutes() {
   router.use("/workflows", require("./modules/workflow/workflow.routes"));
   router.use("/payroll", require("./modules/payroll/payroll.routes"));
   router.use("/documents", require("./modules/documents/document.routes"));
+  router.use("/sheets", require("./modules/documents/sheet.routes"));
+  router.use("/requests", require("./modules/requests/request.routes"));
+  router.use("/tickets", require("./modules/tickets/ticket.routes"));
+  router.use("/expenses", require("./modules/expenses/expense.routes"));
+  router.use("/assets", require("./modules/assets/asset.routes"));
+  router.use("/loans", require("./modules/loans/loan.routes"));
+  router.use("/exits", require("./modules/exits/exit.routes"));
+  router.use("/onboarding", require("./modules/onboarding/onboarding.routes"));
+  router.use("/integrations", require("./modules/integrations/integration.routes"));
+  router.use("/surveys", require("./modules/surveys/survey.routes"));
+  router.use("/performance", require("./modules/performance/performance.routes"));
   router.use("/reports", require("./modules/reports/report.routes"));
   router.use("/notifications", require("./modules/notifications/notification.routes"));
   router.use("/dashboard", require("./modules/dashboard/dashboard.routes"));

@@ -11,6 +11,8 @@ import {
   setAppLockEnabled,
 } from "../../src/auth/AppLockGate";
 import { getBaseUrl } from "../../src/api/client";
+import { useNotificationPreferences, useUpdateNotificationPreferences } from "../../src/api/hooks";
+import { registerForPush } from "../../src/notifications/push";
 import { Card, Divider, Row, Screen, SectionHeader, Txt } from "../../src/components/ui";
 import { spacing } from "../../src/theme";
 import { useToast } from "../../src/components/Toast";
@@ -39,6 +41,8 @@ export default function Settings() {
   const [notificationsGranted, setNotificationsGranted] = useState<boolean | null>(null);
   const [serverOpen, setServerOpen] = useState(false);
   const [baseUrl, setBaseUrlLabel] = useState("");
+  const preferences = useNotificationPreferences();
+  const updatePreferences = useUpdateNotificationPreferences();
 
   useEffect(() => {
     isAppLockEnabled().then(setLockEnabled);
@@ -72,6 +76,19 @@ export default function Settings() {
         `You can turn them on for ${BRAND.name} in your phone's Settings. Without them you will not be told when leave is approved or a payslip is published.`,
         [{ text: "OK" }]
       );
+      return;
+    }
+    // Permission alone delivers nothing: the device has to be registered.
+    const token = await registerForPush({ ask: true });
+    if (token) toast.success("This phone will receive notifications.");
+    else toast.error("Could not register this phone for push. Try again later.");
+  };
+
+  const setNotificationPreference = async (patch: { emailEnabled?: boolean; pushEnabled?: boolean; dailyDigest?: boolean }) => {
+    try {
+      await updatePreferences.mutateAsync(patch);
+    } catch {
+      toast.error("Could not save that preference.");
     }
   };
 
@@ -160,6 +177,34 @@ export default function Settings() {
               notificationsGranted ? (
                 <Ionicons name="checkmark-circle" size={19} color={colors.success} />
               ) : undefined
+            }
+          />
+          <Divider />
+          <Row
+            icon="phone-portrait-outline"
+            title="Push to this account"
+            subtitle="Approvals, payslips and reminders on your phone"
+            right={
+              <Switch
+                value={preferences.data?.pushEnabled ?? true}
+                onValueChange={(value) => setNotificationPreference({ pushEnabled: value })}
+                disabled={preferences.isLoading}
+                trackColor={{ true: colors.brand[500], false: colors.borderStrong }}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            icon="mail-outline"
+            title="Email"
+            subtitle="Copies of important notices to your work email"
+            right={
+              <Switch
+                value={preferences.data?.emailEnabled ?? true}
+                onValueChange={(value) => setNotificationPreference({ emailEnabled: value })}
+                disabled={preferences.isLoading}
+                trackColor={{ true: colors.brand[500], false: colors.borderStrong }}
+              />
             }
           />
         </Card>

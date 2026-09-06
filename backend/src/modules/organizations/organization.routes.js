@@ -222,6 +222,20 @@ router.post(
   )
 );
 
+// ── Data export ─────────────────────────────────────────────────────────────
+
+router.get(
+  "/current/exports",
+  requirePermission("settings.manage"),
+  asyncHandler(async (_req, res) => ok(res, await require("./export.service").list()))
+);
+
+router.post(
+  "/current/exports",
+  requirePermission("settings.manage"),
+  asyncHandler(async (req, res) => ok(res, await require("./export.service").request(req)))
+);
+
 // ── Plan and usage ──────────────────────────────────────────────────────────
 
 router.get(

@@ -77,6 +77,10 @@ const ALLOWED_TYPES = {
   ],
 };
 ALLOWED_TYPES.any = [...ALLOWED_TYPES.image, ...ALLOWED_TYPES.document];
+// Exports are produced by the platform, never uploaded by a person: a bulk
+// letter run or an organization export is a zip, a scheduled sheet may be a
+// spreadsheet, and a data extract is JSON.
+ALLOWED_TYPES.export = [...ALLOWED_TYPES.document, "application/zip", "application/x-zip-compressed", "application/json"];
 
 const CATEGORY_RULES = {
   branding: { types: "image", visibility: "public", maxBytes: 5 * 1024 * 1024 },
@@ -86,7 +90,7 @@ const CATEGORY_RULES = {
   payslip: { types: "document", visibility: "private", maxBytes: 10 * 1024 * 1024 },
   "generated-document": { types: "document", visibility: "private", maxBytes: 10 * 1024 * 1024 },
   import: { types: "document", visibility: "private", maxBytes: 20 * 1024 * 1024 },
-  export: { types: "document", visibility: "private", maxBytes: 50 * 1024 * 1024 },
+  export: { types: "export", visibility: "private", maxBytes: 200 * 1024 * 1024 },
   attachment: { types: "any", visibility: "private", maxBytes: 25 * 1024 * 1024 },
   other: { types: "any", visibility: "private", maxBytes: 10 * 1024 * 1024 },
 };

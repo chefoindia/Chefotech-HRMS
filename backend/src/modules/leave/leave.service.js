@@ -708,6 +708,30 @@ async function cancel(requestId, { reason }, req, auth) {
     req
   );
 
+  // The manager who approved it, or was about to, hears that it is off —
+  // the "leave_cancelled" template existed and nothing ever sent it.
+  try {
+    const recipients = require("../notifications/recipients");
+    const manager = await recipients.managerOf(employee);
+    if (manager && String(manager.userId || "") !== String(employee.userId || "")) {
+      await notifications.notify({
+        template: "leave_cancelled",
+        recipients: [manager],
+        organization: await recipients.organization(),
+        data: {
+          employee: {
+            id: String(employee._id),
+            name: [employee.personal.firstName, employee.personal.lastName].filter(Boolean).join(" "),
+          },
+          leave: { id: String(request._id), type: leaveType.name, from: request.fromDate, to: request.toDate, reason },
+        },
+        entity: { type: "LeaveRequest", id: request._id },
+      });
+    }
+  } catch (err) {
+    logger.warn({ err }, "Leave-cancelled notification failed");
+  }
+
   return request;
 }
 

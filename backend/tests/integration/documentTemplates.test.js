@@ -137,12 +137,14 @@ test("editing blocks and saving round-trips exactly what was sent", async () => 
   assert.equal(refetched.body.data.blocks[0].columns[1].key, "amount");
 });
 
-test("a template's own numbering still increments correctly after the id fix", async () => {
-  // Regression guard: getTemplate() must still return the real Mongo _id for
+test("preview never consumes a document number; a real generation consumes exactly one", async () => {
+  // Two guards in one. getTemplate() must still return the real Mongo _id for
   // generate()'s own internal `updateOne({ _id: ... })` call, even though
-  // the HTTP response for the same read is transformed to `id`. If a future
-  // change moved the transform inside the service function instead of the
-  // route handler, this would silently stop numbering documents.
+  // the HTTP response for the same read is transformed to `id` — if a future
+  // change moved the transform inside the service function, numbering would
+  // silently stop. And preview must be a dry run: it used to advance the
+  // counter every time somebody looked, so the offer letters a customer
+  // actually sent had gaps in their reference numbers.
   const created = await api("POST", "/documents/templates", {
     token: state.token,
     body: {
@@ -153,13 +155,54 @@ test("a template's own numbering still increments correctly after the id fix", a
       blocks: [{ type: "paragraph", text: "Document number: {{document.number}}" }],
     },
   });
+  const templateId = created.body.data.id;
 
-  const first = await api("POST", "/documents/generate/preview", {
+  const preview = await api("POST", "/documents/generate/preview", { token: state.token, body: { templateId } });
+  assert.equal(preview.status, 200, JSON.stringify(preview.body));
+
+  const afterPreview = await api("GET", `/documents/templates/${templateId}`, { token: state.token });
+  assert.equal(afterPreview.body.data.numbering.nextNumber, 1, "a preview must not advance the counter");
+
+  const employee = await api("POST", "/employees", {
     token: state.token,
-    body: { templateId: created.body.data.id },
+    body: { personal: { firstName: "Ravi", lastName: "Kumar" }, employment: { joiningDate: "2026-01-05" } },
   });
-  assert.equal(first.status, 200);
+  assert.equal(employee.status, 201, JSON.stringify(employee.body));
 
-  const afterFirst = await api("GET", `/documents/templates/${created.body.data.id}`, { token: state.token });
-  assert.equal(afterFirst.body.data.numbering.nextNumber, 2, "one preview must advance the counter exactly once");
+  const generated = await api("POST", "/documents/generate", {
+    token: state.token,
+    body: { templateId, employeeId: employee.body.data.id },
+  });
+  assert.equal(generated.status, 201, JSON.stringify(generated.body));
+  assert.equal(generated.body.data.document.documentNumber, "OL/001");
+  assert.equal(typeof generated.body.data.document.verification.code, "string", "a generated document carries a verification code");
+
+  const afterGenerate = await api("GET", `/documents/templates/${templateId}`, { token: state.token });
+  assert.equal(afterGenerate.body.data.numbering.nextNumber, 2, "one generation must advance the counter exactly once");
+});
+
+test("a generated document can be verified publicly by its code, revealing nothing personal", async () => {
+  const created = await api("POST", "/documents/templates", {
+    token: state.token,
+    body: { name: "Certificate", code: "CERT1", contextType: "employee", blocks: [{ type: "paragraph", text: "{{employee.name}}" }] },
+  });
+  const employee = await api("POST", "/employees", {
+    token: state.token,
+    body: { personal: { firstName: "Meera", lastName: "Nair" }, employment: { joiningDate: "2025-06-01" } },
+  });
+  const generated = await api("POST", "/documents/generate", {
+    token: state.token,
+    body: { templateId: created.body.data.id, employeeId: employee.body.data.id },
+  });
+  const code = generated.body.data.document.verification.code;
+
+  const verified = await api("GET", `/public/verify/${code}`);
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.data.valid, true);
+  assert.equal(verified.body.data.documentName, "Certificate");
+  assert.ok(!JSON.stringify(verified.body.data).includes("Meera"), "the verify page must not expose the employee");
+
+  const bogus = await api("GET", "/public/verify/ZZZZZZZZZZ");
+  assert.equal(bogus.status, 200);
+  assert.equal(bogus.body.data.valid, false);
 });

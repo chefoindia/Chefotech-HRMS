@@ -54,6 +54,8 @@ export default function UsersSettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [removing, setRemoving] = useState<OrgUser | null>(null);
   const [editingRoles, setEditingRoles] = useState<OrgUser | null>(null);
+  const [signingOut, setSigningOut] = useState<OrgUser | null>(null);
+  const [resettingMfa, setResettingMfa] = useState<OrgUser | null>(null);
 
   const { items, total, limit, isLoading, error, refetch } = useListQuery<OrgUser>(
     "org-users",
@@ -91,6 +93,30 @@ export default function UsersSettingsPage() {
     onError: (err) => {
       toast.fromError(err, "Could not remove that person's access.");
       setRemoving(null);
+    },
+  });
+
+  const revokeSessions = useMutation({
+    mutationFn: async (userId: string) => (await api.post<{ revoked: number }>(`/users/${userId}/revoke-sessions`)).data,
+    onSuccess: (data) => {
+      toast.success("Signed out everywhere", `${data.revoked} session${data.revoked === 1 ? "" : "s"} ended. They will need to sign in again.`);
+      setSigningOut(null);
+    },
+    onError: (err) => {
+      toast.fromError(err, "Could not end their sessions.");
+      setSigningOut(null);
+    },
+  });
+
+  const resetMfa = useMutation({
+    mutationFn: async (userId: string) => api.post(`/users/${userId}/reset-mfa`),
+    onSuccess: () => {
+      toast.success("Two-factor reset", "They can sign in with their password and set up a new authenticator.");
+      setResettingMfa(null);
+    },
+    onError: (err) => {
+      toast.fromError(err, "Could not reset two-factor for that user.");
+      setResettingMfa(null);
     },
   });
 
@@ -161,6 +187,32 @@ export default function UsersSettingsPage() {
               }}
             >
               Roles
+            </Button>
+          )}
+          {can("user.update") && row.id !== session?.user.id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="End every session this person has, on every device"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSigningOut(row);
+              }}
+            >
+              Sign out
+            </Button>
+          )}
+          {can("settings.manage_security") && row.id !== session?.user.id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Remove their second factor when they have lost their phone and recovery codes"
+              onClick={(event) => {
+                event.stopPropagation();
+                setResettingMfa(row);
+              }}
+            >
+              Reset 2FA
             </Button>
           )}
           {can("user.deactivate") && row.id !== session?.user.id && (
@@ -247,6 +299,43 @@ export default function UsersSettingsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(signingOut)}
+        onClose={() => setSigningOut(null)}
+        onConfirm={() => {
+          if (signingOut) revokeSessions.mutate(signingOut.id);
+        }}
+        loading={revokeSessions.isPending}
+        title="Sign this person out everywhere?"
+        confirmLabel="Sign out everywhere"
+        message={
+          signingOut ? (
+            <>
+              Every browser and app where <strong>{signingOut.fullName || signingOut.email}</strong> is signed in is ended straight away. Use this for a lost laptop or a suspected account takeover. Their access is unchanged — they can sign in again.
+            </>
+          ) : null
+        }
+      />
+
+      <ConfirmDialog
+        open={Boolean(resettingMfa)}
+        onClose={() => setResettingMfa(null)}
+        onConfirm={() => {
+          if (resettingMfa) resetMfa.mutate(resettingMfa.id);
+        }}
+        loading={resetMfa.isPending}
+        tone="danger"
+        title="Reset two-factor authentication?"
+        confirmLabel="Reset two-factor"
+        message={
+          resettingMfa ? (
+            <>
+              <strong>{resettingMfa.fullName || resettingMfa.email}</strong> will be able to sign in with just their password until they set up a new authenticator, and every current session of theirs is ended. Only do this after confirming with them directly — a request by email alone is exactly what an attacker would send.
+            </>
+          ) : null
+        }
+      />
 
       <ConfirmDialog
         open={Boolean(removing)}

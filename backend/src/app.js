@@ -14,6 +14,31 @@ const { apiLimiter } = require("./core/security/rateLimit");
 const { AppError } = require("./core/errors/AppError");
 const buildRoutes = require("./routes");
 
+let mailReadinessCache = { at: 0, value: null };
+const MAIL_READINESS_TTL_MS = 5 * 60 * 1000;
+
+async function mailReadiness() {
+  if (mailReadinessCache.value && Date.now() - mailReadinessCache.at < MAIL_READINESS_TTL_MS) {
+    return mailReadinessCache.value;
+  }
+  const mailer = require("./modules/notifications/mailer");
+  let value;
+  if (!env.mail.enabled) {
+    // Off is fine in development (the outbox catches everything); in
+    // production it means every reset and invitation silently goes nowhere.
+    value = { ok: !env.isProd, detail: "MAIL_ENABLED is not true", driver: env.mail.driver };
+  } else {
+    try {
+      const result = await mailer.verify();
+      value = { ok: Boolean(result.ok), detail: result.ok ? "reachable" : result.reason, driver: env.mail.driver };
+    } catch (err) {
+      value = { ok: false, detail: err.message, driver: env.mail.driver };
+    }
+  }
+  mailReadinessCache = { at: Date.now(), value };
+  return value;
+}
+
 function createApp() {
   const app = express();
 
@@ -166,6 +191,12 @@ function createApp() {
     } catch (err) {
       checks.storage = { ok: false, detail: err.message };
     }
+
+    // Mail is part of readiness: a server that cannot send a password reset
+    // is not ready to serve people. The provider check is cached because a
+    // readiness probe every few seconds must not become a rate-limited API
+    // call to Brevo.
+    checks.mail = await mailReadiness();
 
     const healthy = Object.values(checks).every((check) => check.ok);
     res.status(healthy ? 200 : 503).json({

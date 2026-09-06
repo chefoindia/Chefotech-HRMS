@@ -114,6 +114,13 @@ export default function AppLayout() {
       <Tabs.Screen name="help" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="holidays" options={{ href: null }} />
+      <Tabs.Screen name="requests" options={{ href: null }} />
+      <Tabs.Screen name="tickets" options={{ href: null }} />
+      <Tabs.Screen name="expenses" options={{ href: null }} />
+      <Tabs.Screen name="assets" options={{ href: null }} />
+      <Tabs.Screen name="loans" options={{ href: null }} />
+      <Tabs.Screen name="surveys" options={{ href: null }} />
+      <Tabs.Screen name="performance" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -190,6 +190,24 @@ const env = {
     user: process.env.SMTP_USER || "",
     pass: process.env.SMTP_PASS || "",
     from: process.env.MAIL_FROM || "Chefotech HRMS <no-reply@chefotech.com>",
+    /** Where replies to an automated email land — a support inbox, usually. */
+    replyTo: process.env.MAIL_REPLY_TO || "",
+  },
+
+  push: {
+    /**
+     * Optional. Expo push works without it; a token raises the rate limits
+     * and is required once the app is published with enhanced security on.
+     */
+    expoAccessToken: process.env.EXPO_ACCESS_TOKEN || "",
+    /**
+     * Web push (browser notifications) needs a VAPID key pair. Generate once:
+     *   node -e "const w=require('web-push');console.log(w.generateVAPIDKeys())"
+     * and never rotate casually — every browser subscription is bound to it.
+     */
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY || "",
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || "",
+    vapidSubject: process.env.VAPID_SUBJECT || "mailto:support@chefotech.com",
   },
 
   jobs: {

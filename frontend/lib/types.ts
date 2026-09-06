@@ -96,6 +96,7 @@ export interface SessionUser {
   isPlatformUser: boolean;
   locale: string;
   timezone: string | null;
+  mfaEnabled?: boolean;
 }
 
 export interface Session {
@@ -110,6 +111,11 @@ export interface Session {
   isManager?: boolean;
   isPlatformUser: boolean;
   platformRole?: string | null;
+  /** The organization's password-expiry rule says this password is too old. */
+  passwordExpired?: boolean;
+  /** The organization requires two-factor for administrators and this account has none yet. */
+  mfaSetupRequired?: boolean;
+  mfaEnabled?: boolean;
 }
 
 export interface Paged<T> {
@@ -345,15 +351,113 @@ export interface LeavePreview {
   attachmentRequired: boolean;
 }
 
+export type NotificationCategory =
+  | "leave"
+  | "attendance"
+  | "payroll"
+  | "document"
+  | "workflow"
+  | "employee"
+  | "system"
+  | "announcement"
+  | "ticket"
+  | "expense"
+  | "asset";
+
 export interface Notification {
   id: string;
   title: string;
   body: string;
   actionUrl: string | null;
   severity: "info" | "success" | "warning" | "critical";
-  category: string;
+  category: NotificationCategory | string;
+  event?: string;
+  entityType?: string | null;
+  entityId?: string | null;
   readAt: string | null;
   createdAt: string;
+  delivery?: Record<string, { status: string; at?: string; error?: string }>;
+}
+
+export interface NotificationPreference {
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  dailyDigest: boolean;
+  muted: Array<{ category: NotificationCategory | string; channel: "email" | "push" }>;
+  quietHours: { enabled: boolean; start: string; end: string };
+  isDefault?: boolean;
+  categories?: string[];
+}
+
+export interface PushDevice {
+  id: string;
+  kind: "expo" | "web";
+  platform: string;
+  deviceName: string;
+  appVersion: string;
+  lastSeenAt: string;
+  lastDeliveredAt: string | null;
+  isActive: boolean;
+  disabledReason: string | null;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  audience: { type: "all" | "department" | "location" | "employees"; departmentId: string | null; locationId: string | null; employeeIds: string[] };
+  channels: string[];
+  attachmentFileIds: string[];
+  requireAcknowledgement: boolean;
+  scheduledFor: string | null;
+  status: "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+  sentAt: string | null;
+  recipientCount: number;
+  acknowledgedCount: number;
+  pinnedUntil: string | null;
+  error: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  acknowledged?: boolean;
+  acknowledgedAt?: string | null;
+}
+
+export interface MailMessage {
+  id: string;
+  to: string;
+  toName: string;
+  subject: string;
+  text: string;
+  templateKey: string | null;
+  event: string | null;
+  status: "queued" | "sending" | "sent" | "failed" | "simulated" | "skipped";
+  provider: string | null;
+  providerMessageId: string | null;
+  error: string | null;
+  attempts: number;
+  lastAttemptAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  resendOf?: string | null;
+}
+
+export interface NotificationRule {
+  id: string;
+  name: string;
+  description: string;
+  event: string;
+  templateKey: string | null;
+  condition: string | null;
+  recipients: Array<{
+    type: string;
+    roleIds?: string[];
+    userIds?: string[];
+    employeeIds?: string[];
+    email?: string;
+  }>;
+  channels: string[] | null;
+  isActive: boolean;
+  isSystemDefault: boolean;
 }
 
 export interface Tour {

@@ -1158,6 +1158,22 @@ async function reviewOvertime(recordIds, decision, req) {
     await record.save();
   }
 
+  // Approved overtime is money on the next payslip; the person should know.
+  if (decision === "approve" && records.length) {
+    const employees = await Employee.find({ _id: { $in: records.map((r) => r.employeeId) } })
+      .select("userId personal.firstName personal.lastName personal.workEmail")
+      .lean();
+    const byId = Object.fromEntries(employees.map((e) => [String(e._id), e]));
+    for (const record of records) {
+      const employee = byId[String(record.employeeId)];
+      if (!employee || !employee.userId) continue;
+      await notifyEmployee(employee, "overtime_approved", {
+        date: record.date,
+        hours: Math.round(((record.overtimeMinutes || 0) / 60) * 100) / 100,
+      }).catch(() => {});
+    }
+  }
+
   await audit.record(
     {
       action: `attendance.overtime_${decision}d`,

@@ -30,7 +30,7 @@ import { Wordmark } from "../../src/components/Wordmark";
  * their own deployment cannot use the app at all without it.
  */
 export default function Login() {
-  const { signIn } = useSession();
+  const { signIn, completeMfa } = useSession();
   const router = useRouter();
   const colors = useColors();
   const passwordRef = useRef<TextInput>(null);
@@ -43,6 +43,8 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverSheetOpen, setServerSheetOpen] = useState(false);
   const [baseUrl, setBaseUrlLabel] = useState<string>("");
+  // The second step, when the account has two-factor on.
+  const [mfa, setMfa] = useState<{ token: string; code: string; recovery: boolean } | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -58,7 +60,11 @@ export default function Login() {
 
     setSubmitting(true);
     try {
-      await signIn(email.trim(), password);
+      const outcome = await signIn(email.trim(), password);
+      if (outcome.mfaRequired) {
+        setMfa({ token: outcome.mfaToken, code: "", recovery: false });
+        return;
+      }
       router.replace("/(app)");
     } catch (caught) {
       if (caught instanceof ApiError) {
@@ -71,6 +77,90 @@ export default function Login() {
       setSubmitting(false);
     }
   };
+
+  const submitCode = async () => {
+    if (!mfa) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await completeMfa(mfa.token, mfa.code.trim());
+      router.replace("/(app)");
+    } catch (caught) {
+      if (caught instanceof ApiError) {
+        setError(caught.message);
+        // The five-minute window closed: back to the password.
+        if (/expired/i.test(caught.message)) setMfa(null);
+      } else {
+        setError("Could not verify the code. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (mfa) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing["2xl"] }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.View entering={FadeInDown.duration(300)}>
+              <View style={{ alignItems: "center", marginBottom: spacing["2xl"] }}>
+                <Ionicons name="shield-checkmark-outline" size={40} color={colors.brand[600]} />
+                <Txt variant="title" style={{ marginTop: spacing.lg }}>
+                  Two-factor authentication
+                </Txt>
+                <Txt variant="body" tone="muted" style={{ marginTop: 4, textAlign: "center" }}>
+                  {mfa.recovery ? "Enter one of the recovery codes you saved when you set this up." : "Enter the six-digit code from your authenticator app."}
+                </Txt>
+              </View>
+
+              {error && (
+                <View accessibilityRole="alert" style={{ backgroundColor: colors.dangerBg, borderRadius: 12, padding: spacing.md, marginBottom: spacing.lg, flexDirection: "row", gap: spacing.sm }}>
+                  <Ionicons name="alert-circle" size={18} color={colors.danger} />
+                  <Txt variant="label" tone="danger" style={{ flex: 1, lineHeight: 19 }}>
+                    {error}
+                  </Txt>
+                </View>
+              )}
+
+              <Field
+                label={mfa.recovery ? "Recovery code" : "Authentication code"}
+                icon={mfa.recovery ? "key-outline" : "shield-checkmark-outline"}
+                value={mfa.code}
+                onChangeText={(code) => setMfa({ ...mfa, code })}
+                placeholder={mfa.recovery ? "ABCDE-FGHJK" : "123456"}
+                keyboardType={mfa.recovery ? "default" : "number-pad"}
+                autoCapitalize={mfa.recovery ? "characters" : "none"}
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                returnKeyType="go"
+                onSubmitEditing={submitCode}
+                editable={!submitting}
+                autoFocus
+              />
+
+              <Button title="Continue" onPress={submitCode} loading={submitting} size="lg" disabled={mfa.code.replace(/\s/g, "").length < 6} />
+
+              <Pressable onPress={() => setMfa({ ...mfa, recovery: !mfa.recovery, code: "" })} style={{ alignSelf: "center", marginTop: spacing.xl, padding: spacing.sm }} hitSlop={8}>
+                <Txt variant="label" tone="brand">
+                  {mfa.recovery ? "Use my authenticator app instead" : "Lost your phone? Use a recovery code"}
+                </Txt>
+              </Pressable>
+              <Pressable onPress={() => setMfa(null)} style={{ alignSelf: "center", padding: spacing.sm }} hitSlop={8}>
+                <Txt variant="caption" tone="subtle">
+                  Start over
+                </Txt>
+              </Pressable>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   const openServerSheet = async () => {
     setBaseUrlLabel(await getBaseUrl());

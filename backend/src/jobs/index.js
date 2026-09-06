@@ -277,6 +277,77 @@ function registerJobs() {
     return { sent, checked: documents.length };
   });
 
+  /** Many letters at once, delivered as a zip. */
+  queue.register("documents.bulk-generate", async (payload) => {
+    const documentService = require("../modules/documents/document.service");
+    return documentService.runBulkGenerate(payload);
+  });
+
+  /** "Please acknowledge" and "please upload" nudges, every three days. */
+  queue.register("documents.reminders", async () => {
+    const documentService = require("../modules/documents/document.service");
+    const [acknowledgements, requests] = await Promise.all([
+      documentService.sendAcknowledgementReminders(),
+      documentService.sendRequestReminders(),
+    ]);
+    return { acknowledgements, requests };
+  });
+
+  // ── Lifecycle: onboarding, exits, scheduled movements ─────────────────────
+
+  /** Tick self-completing joining tasks and chase overdue ones. */
+  queue.register("onboarding.daily", async () => {
+    const onboarding = require("../modules/onboarding/onboarding.service");
+    const auto = await onboarding.runAutoCompletions();
+    const reminders = await onboarding.sendReminders();
+    return { auto, reminders };
+  });
+
+  /** Promotions, transfers and confirmations dated today (or missed) apply themselves. */
+  queue.register("employees.apply-changes", async () => {
+    const changes = require("../modules/employees/change.service");
+    return changes.applyDue();
+  });
+
+  // ── Surveys ───────────────────────────────────────────────────────────────
+
+  /** Close surveys past their date; remind people two days before. */
+  queue.register("surveys.daily", async () => {
+    const surveys = require("../modules/surveys/survey.service");
+    return surveys.runDaily();
+  });
+
+  // ── Scheduled sheets and data export ──────────────────────────────────────
+
+  /** Sheets due this hour, in the organization's own time zone. */
+  queue.register("sheets.run-schedules", async () => {
+    const schedules = require("../modules/documents/sheetSchedule.service");
+    return schedules.runDue();
+  });
+
+  /** A full export of the organization's data as a zip of JSON files. */
+  queue.register("organization.export", async (payload) => {
+    const exporter = require("../modules/organizations/export.service");
+    return exporter.run(payload);
+  });
+
+  // ── Integrations ──────────────────────────────────────────────────────────
+
+  /** One webhook delivery; throws on a non-2xx so the queue retries with backoff. */
+  queue.register("webhooks.deliver", async (payload) => {
+    const integrations = require("../modules/integrations/integration.service");
+    const delivery = await integrations.deliver(payload.deliveryId);
+    return delivery ? { status: delivery.status, attempts: delivery.attempts, responseStatus: delivery.responseStatus } : { skipped: true };
+  });
+
+  // ── Assets ────────────────────────────────────────────────────────────────
+
+  /** "That laptop was due back last week" — every three days until it is. */
+  queue.register("assets.return-reminders", async () => {
+    const assetService = require("../modules/assets/asset.service");
+    return assetService.sendReturnReminders();
+  });
+
   // ── Workflow ──────────────────────────────────────────────────────────────
 
   queue.register("workflow.process-overdue", async () => {
@@ -319,6 +390,48 @@ function registerJobs() {
     );
 
     return { employeeCount, activeEmployeeCount, storageBytes };
+  });
+
+  // ── Mail and push ─────────────────────────────────────────────────────────
+
+  /**
+   * One email. The MailMessage row already exists; this attempts delivery
+   * and records the outcome. A provider failure throws, which is what gives
+   * it the queue's retry and backoff.
+   */
+  queue.register("mail.send", async (payload) => {
+    const outbound = require("../modules/notifications/outbound.service");
+    return outbound.sendNow(payload.messageId);
+  });
+
+  queue.register("push.send", async (payload) => {
+    const push = require("../modules/notifications/push.service");
+    return push.sendToUser(payload.userId, payload.message);
+  });
+
+  /** Global, not per tenant: device tokens belong to users. */
+  queue.register("push.check-receipts", async () => {
+    const push = require("../modules/notifications/push.service");
+    return push.checkReceipts();
+  });
+
+  // ── Notifications driven by the calendar ──────────────────────────────────
+
+  queue.register("notification.daily-events", async (payload) => {
+    const dailyEvents = require("../modules/notifications/dailyEvents.service");
+    const attendanceService = require("../modules/attendance/attendance.service");
+    const timezone = await attendanceService.organizationTimezone();
+    return dailyEvents.run({ date: payload.date, timezone });
+  });
+
+  queue.register("notification.daily-digest", async (payload) => {
+    const digest = require("../modules/notifications/digest.service");
+    return digest.sendAll({ date: payload.date });
+  });
+
+  queue.register("announcements.send-due", async () => {
+    const announcements = require("../modules/notifications/announcement.service");
+    return announcements.sendDue();
   });
 
   logger.info({ handlers: queue.registeredJobs().length }, "Job handlers registered");

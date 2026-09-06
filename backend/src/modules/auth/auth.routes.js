@@ -30,6 +30,14 @@ router.post(
   asyncHandler(controller.login)
 );
 
+/** Second step of sign-in when the account has two-factor on. */
+router.post(
+  "/mfa/verify",
+  authLimiter,
+  validate({ body: schemas.MfaVerifySchema }),
+  asyncHandler(controller.mfaVerify)
+);
+
 router.post(
   "/refresh",
   authLimiter,
@@ -71,6 +79,16 @@ router.post(
 
 router.get("/me", authenticate(), asyncHandler(controller.me));
 
+// A signed-in person whose address is still unconfirmed can ask for the
+// confirmation email again. Rate limited like every other outbound-mail
+// endpoint; works before an organization is chosen.
+router.post(
+  "/resend-verification",
+  strictLimiter,
+  authenticate({ allowNoOrganization: true }),
+  asyncHandler(controller.resendVerification)
+);
+
 // Available between sign-in and choosing an organization, so it must not
 // require a tenant context.
 router.get(
@@ -92,5 +110,42 @@ router.post(
   validate({ body: schemas.ChangePasswordSchema }),
   asyncHandler(controller.changePassword)
 );
+
+// ── Account security: two-factor, sessions, history ─────────────────────────
+// All of these work before an organization is chosen, because a person who
+// has been told to set up two-factor must be able to do so from anywhere.
+
+router.get("/security", authenticate({ allowNoOrganization: true }), asyncHandler(controller.securityStatus));
+
+router.post("/mfa/setup", strictLimiter, authenticate({ allowNoOrganization: true }), asyncHandler(controller.mfaSetup));
+
+router.post(
+  "/mfa/enable",
+  authLimiter,
+  authenticate({ allowNoOrganization: true }),
+  validate({ body: schemas.MfaEnableSchema }),
+  asyncHandler(controller.mfaEnable)
+);
+
+router.post(
+  "/mfa/disable",
+  authLimiter,
+  authenticate({ allowNoOrganization: true }),
+  validate({ body: schemas.MfaDisableSchema }),
+  asyncHandler(controller.mfaDisable)
+);
+
+router.post(
+  "/mfa/recovery-codes",
+  authLimiter,
+  authenticate({ allowNoOrganization: true }),
+  validate({ body: schemas.MfaEnableSchema }),
+  asyncHandler(controller.mfaRecoveryCodes)
+);
+
+router.get("/sessions", authenticate({ allowNoOrganization: true }), asyncHandler(controller.sessions));
+router.delete("/sessions/:family", authenticate({ allowNoOrganization: true }), asyncHandler(controller.revokeSession));
+router.post("/sessions/revoke-others", authenticate({ allowNoOrganization: true }), asyncHandler(controller.revokeOtherSessions));
+router.get("/login-history", authenticate({ allowNoOrganization: true }), asyncHandler(controller.loginHistory));
 
 module.exports = router;

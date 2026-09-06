@@ -304,7 +304,11 @@ export const api = {
     request<T>(path, { ...options, method: "POST", body }),
   patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "PATCH", body }),
-  delete: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
+  put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "PUT", body }),
+  // DELETE may carry a body: unregistering a push device sends its token
+  // that way rather than in the URL, where it would be logged by proxies.
+  delete: <T>(path: string, options?: Omit<RequestOptions, "method">) =>
     request<T>(path, { ...options, method: "DELETE" }),
 
   /** Absolute URL for a file the API serves, for download or sharing. */

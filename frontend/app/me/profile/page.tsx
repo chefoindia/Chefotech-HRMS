@@ -23,6 +23,8 @@ import {
   useToast,
 } from "@/components/ui";
 import type { Employee } from "@/lib/types";
+import { PreferencesPanel } from "@/components/notifications/PreferencesPanel";
+import { ChangePasswordDialog } from "@/components/security/ChangePasswordDialog";
 
 /**
  * My profile.
@@ -219,6 +221,11 @@ export default function MyProfilePage() {
         </DetailGrid>
       </Card>
 
+      <div className="mt-5">
+        <h2 className="mb-3 text-[15px] font-semibold text-[var(--text)]">Notifications</h2>
+        <PreferencesPanel />
+      </div>
+
       <ChangePasswordDialog
         open={changingPassword}
         onClose={() => setChangingPassword(false)}
@@ -228,92 +235,3 @@ export default function MyProfilePage() {
   );
 }
 
-function ChangePasswordDialog({
-  open,
-  onClose,
-  onDone,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const toast = useToast();
-  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
-  const [error, setError] = useState<string | null>(null);
-
-  const change = useMutation({
-    mutationFn: async () => {
-      await api.post("/auth/change-password", {
-        currentPassword: form.currentPassword,
-        newPassword: form.newPassword,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Password changed", "You will be signed out of every device.");
-      onDone();
-    },
-    onError: (err) => {
-      setError(err instanceof ApiError ? err.message : "Could not change your password.");
-    },
-  });
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Change your password"
-      size="sm"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            loading={change.isPending}
-            disabled={
-              !form.currentPassword || !form.newPassword || form.newPassword !== form.confirm
-            }
-            onClick={() => {
-              setError(null);
-              change.mutate();
-            }}
-          >
-            Change password
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        {error && <Callout tone="danger">{error}</Callout>}
-
-        <Callout tone="info">
-          Changing your password signs you out everywhere, including this device.
-        </Callout>
-
-        <Input
-          label="Current password"
-          type="password"
-          autoComplete="current-password"
-          value={form.currentPassword}
-          onChange={(event) => setForm({ ...form, currentPassword: event.target.value })}
-        />
-        <Input
-          label="New password"
-          type="password"
-          autoComplete="new-password"
-          value={form.newPassword}
-          onChange={(event) => setForm({ ...form, newPassword: event.target.value })}
-          hint="At least 10 characters, with an uppercase letter, a lowercase letter and a number."
-        />
-        <Input
-          label="Confirm new password"
-          type="password"
-          autoComplete="new-password"
-          value={form.confirm}
-          onChange={(event) => setForm({ ...form, confirm: event.target.value })}
-          error={form.confirm && form.newPassword !== form.confirm ? "These do not match" : undefined}
-        />
-      </div>
-    </Modal>
-  );
-}

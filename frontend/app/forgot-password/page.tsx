@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { MailCheck } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button, Callout, Input } from "@/components/ui";
 
@@ -11,17 +11,36 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
+    setError(null);
 
-    // The API always reports success, whether or not the address exists, so an
-    // attacker cannot use this form to discover who has an account.
-    await api.post("/auth/forgot-password", { email }).catch(() => {});
-
-    setSent(true);
-    setSubmitting(false);
+    try {
+      // The API reports success whether or not the address exists, so this
+      // form cannot be used to discover who has an account. The one thing it
+      // WILL say is that the server cannot send email at all — which is true
+      // for every address alike, and worth knowing instead of waiting.
+      const { data } = await api.post<{ message: string; devResetUrl?: string }>(
+        "/auth/forgot-password",
+        { email },
+        { raw: true }
+      );
+      setDevResetUrl(data?.devResetUrl || null);
+      setSent(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "MAIL_ERROR") {
+        setError(err.message);
+      } else {
+        // Anything else is treated as sent, for the enumeration reason above.
+        setSent(true);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (sent) {
@@ -48,6 +67,16 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
 
+        {devResetUrl && (
+          <Callout tone="warning" className="mt-4" title="Development only">
+            Mail is switched off on this server, so here is the link that would have been
+            emailed:{" "}
+            <Link href={devResetUrl.replace(/^https?:\/\/[^/]+/, "")} className="break-all font-medium underline">
+              open reset link
+            </Link>
+          </Callout>
+        )}
+
         <Button variant="ghost" size="sm" className="mt-4" fullWidth onClick={() => setSent(false)}>
           Use a different address
         </Button>
@@ -66,6 +95,8 @@ export default function ForgotPasswordPage() {
       }
     >
       <form onSubmit={submit} className="space-y-4" noValidate>
+        {error && <Callout tone="danger">{error}</Callout>}
+
         <Input
           label="Work email"
           type="email"
@@ -76,7 +107,7 @@ export default function ForgotPasswordPage() {
           placeholder="you@company.com"
         />
 
-        <Button type="submit" fullWidth size="lg" loading={submitting}>
+        <Button type="submit" fullWidth size="lg" loading={submitting} disabled={!email.trim()}>
           Send reset link
         </Button>
 

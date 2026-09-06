@@ -35,6 +35,30 @@ import { HelpAssistant } from "@/components/help/HelpAssistant";
 import { TourEngine } from "@/components/help/TourEngine";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { OnboardingBanner } from "./OnboardingBanner";
+import { EmailVerificationBanner } from "./EmailVerificationBanner";
+import { SecurityGate } from "./SecurityGate";
+
+/**
+ * Permissions that make the admin side worth landing on. Someone with none
+ * of these — a self-service-only employee — belongs in the portal, which is
+ * exactly where the sign-in response would have sent them.
+ */
+const ADMIN_SIDE_PERMISSIONS = [
+  "dashboard.view_org_wide",
+  "employee.view",
+  "workflow.act",
+  "leave.approve",
+  "attendance.approve",
+  "attendance.view_team",
+  "leave.view_team",
+  "settings.view",
+  "report.view",
+  "payroll.view",
+  "document.view",
+  "user.view",
+  "role.view",
+  "audit.view",
+];
 
 /**
  * The application shell.
@@ -91,6 +115,15 @@ export function AppShell({
   useEffect(() => {
     if (!loading && !session) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [loading, session, router, pathname]);
+
+  // A self-service-only account on the admin side sees an empty dashboard
+  // and a sidebar with nothing in it. Send them to the portal instead.
+  useEffect(() => {
+    if (loading || !session || variant !== "app") return;
+    if (session.isPlatformUser) return;
+    if (canAny(...ADMIN_SIDE_PERMISSIONS) || session.isManager) return;
+    router.replace(pathname === "/app/notifications" ? "/me/notifications" : "/me");
+  }, [loading, session, variant, canAny, router, pathname]);
 
   useEffect(() => setMobileOpen(false), [pathname]);
 
@@ -312,6 +345,8 @@ export function AppShell({
         </header>
 
         <main id="main" className="flex-1 px-4 py-5 lg:px-6 lg:py-6">
+          <SecurityGate />
+          <EmailVerificationBanner />
           {variant === "app" && <OnboardingBanner />}
           {children}
         </main>

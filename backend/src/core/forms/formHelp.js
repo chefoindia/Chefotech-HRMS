@@ -975,6 +975,86 @@ const document_template = {
     why: "Means two different things depending on the block it sits on. For a spacer it is the blank gap inserted, on the twelve-to-a-line scale; for an image it caps the drawn height, with the width fitted to at most three times that figure so the picture keeps its proportions.",
     example: "A spacer of 48 opens about four blank lines above a signature. An image of 48 prints a small stamp, while 120 lets the same file spread across a band as wide as 360.",
   },
+  "header.showContact": {
+    why: "Whether the organization's phone number and email print under the address in the letterhead line. Letters that leave the building — offers, experience certificates — need a way for a bank or a new employer to verify them; internal memos do not.",
+    example: "On, an offer letter's header ends 'hr@company.com · +91 98765 43210'. Off, it stops at the postal address, which reads cleaner on an internal warning letter nobody outside should be calling about.",
+  },
+  "footer.showVerificationQr": {
+    why: "Prints a QR code and a short code on every page that anyone can check on the public verification page. It proves the document was issued by you and has not been altered, without revealing who it is about. Worth switching on for anything a third party might be shown.",
+    example: "On, an experience certificate carries 'Verify: K7QW3N8P2M' and a QR; a future employer scans it and sees 'genuine, issued 12 Mar 2026 by Alpha Textiles'. Off, the same certificate can be edited in any PDF tool and nobody can tell.",
+  },
+  "blocks.level": {
+    why: "Which size a heading prints at. Level 1 is the document title, 2 a section, 3 a sub-section. The renderer picks the font size and the space above from this, so it is the only way to make a heading hierarchy visible on paper.",
+    example: "Set 1 for 'OFFER OF EMPLOYMENT' at the top, 2 for 'Compensation' and 3 for 'Variable pay' inside it. Give every heading level 1 and the letter reads as three shouted titles rather than a structure.",
+  },
+  "blocks.underline": {
+    why: "Draws a rule under the heading text. A convention on Indian formal letters for the subject line; noise anywhere else.",
+    example: "On for 'Subject: Confirmation of employment' matches what a court or a bank expects to see. On for every section heading and the page looks ruled like an exercise book.",
+  },
+  "blocks.columns.format": {
+    why: "How the column's raw value is printed. 'money' adds the currency symbol and thousands separators, 'date' applies the organization's date format, 'percent' appends a sign. The data arrives as plain numbers; this is what turns 45000 into ₹45,000.00.",
+    example: "An amount column with format money prints ₹1,25,000.00; the same column as text prints 125000. A joining date as date prints 5 Jan 2026 in the organization's format; as text it prints the raw ISO string.",
+  },
+  "blocks.columns.total": {
+    why: "Sums the column in a totals row under the table. Only sensible for amounts; the renderer adds the row when any column asks for it and leaves other columns of that row blank.",
+    example: "Tick it on the Amount column of a salary annexure and 'Total ₹12,00,000.00' prints beneath the components. Tick it on the Component name column and the totals row prints a meaningless blank.",
+  },
+  "blocks.zebra": {
+    why: "Shades every second row. It costs nothing on screen and makes a twelve-row payslip table far easier to read across on paper, where the eye otherwise slips a row between name and amount.",
+    example: "On, rows alternate white and light grey. Off, a settlement statement with fifteen dues and recoveries becomes hard to read line by line — the usual cause of 'the F&F figure looks wrong' queries that are actually mis-read rows.",
+  },
+  "blocks.showIndex": {
+    why: "Adds a numbered first column (1, 2, 3…). Useful when the letter refers to rows by number — 'items 3 and 4 above' — or on checklists; clutter on a two-column earnings table.",
+    example: "On for an exit clearance table so IT can say 'item 2 is pending'. Off for a payslip, where numbering the earnings adds nothing.",
+  },
+  "blocks.totalsLabel": {
+    why: "The text printed in the first column of the totals row, when any column is summed. Without one the row still prints, with a blank where 'Total' should be.",
+    example: "'Total CTC' on a salary annexure, 'Net payable' on a settlement statement. Leave it empty and the summed figure sits alone at the bottom, unexplained.",
+  },
+  "blocks.emptyText": {
+    why: "What prints when the table's data list has no rows — no recoveries in a settlement, no deductions on a payslip. Without it the table simply vanishes, and a reader cannot tell 'nothing to recover' from 'the section was forgotten'.",
+    example: "'No recoveries' under the recoveries table of a clean F&F statement reassures the leaver. Empty, the heading 'Recoveries' is followed by nothing at all.",
+  },
+  "blocks.headerColour": {
+    why: "The background colour of the table's header row, as a hex value. Left blank it uses the organization's brand colour at a light tint, which matches the rest of the document; set it when a template must match pre-printed stationery.",
+    example: "#F3F4F6 gives a neutral grey header that prints well on a monochrome office printer. #4F46E5 with white text looks right on screen and turns to a dark smear on that same printer.",
+  },
+  "blocks.layout": {
+    why: "Whether label/value pairs sit two to a line or one. Two per line halves the height of an employee details block; one per line suits long values such as addresses.",
+    example: "'Two pairs per line' fits code, designation, department and joining date in two rows. Put a full postal address in that layout and it wraps under the neighbouring pair.",
+  },
+  "blocks.inline": {
+    why: "Prints each label and its value on the same line ('Employee code: EMP001') instead of the label above the value. Denser, and closer to how a bank or a visa office expects a certificate to read.",
+    example: "Inline, an address-proof letter reads 'Employee code: EMP0142' in one line. Stacked, the label sits in small grey type above the value — better for a form-like ID card, worse for prose.",
+  },
+  "blocks.left": {
+    why: "The text of the left column in a two-column block. Fields and **bold** work exactly as in a paragraph. The classic use is the two addresses at the top of a letter, or two signatories at the bottom.",
+    example: "'{{company.legalName}}\\n{{company.addressLine}}' on the left with the employee's address on the right produces the standard letter opening in one block rather than a table.",
+  },
+  "blocks.right": {
+    why: "The text of the right column in a two-column block. Same rules as the left; the two print side by side at half width each.",
+    example: "'Date: {{date.todayFormatted}}\\nRef: {{document.number}}' on the right of a letter opening puts the reference where a reader looks for it.",
+  },
+  "blocks.align": {
+    why: "Which side of the page a signature line or verification QR sits on. Signatures conventionally go right for the company and left for the employee; the QR usually goes right, under the signature.",
+    example: "Right for 'Authorised Signatory' and left for 'Employee' gives the paired signature lines a resignation acceptance needs. Both left and they stack awkwardly on one side.",
+  },
+  "storeAs.category": {
+    why: "Which folder of the employee's file a generated document lands in — identity, employment, salary, certificate and so on. Left blank it is inferred from the template category. It decides where HR and the employee look for it later, and which category filters find it.",
+    example: "A custom 'Travel letter' template filed under certificate turns up beside the bonafide and address-proof letters. Leave it blank on a 'custom' template and it lands in 'other', where nobody looks.",
+  },
+  "storeAs.visibleToEmployee": {
+    why: "Whether the employee can see and download a generated document by default. On for anything addressed to them; off for internal drafts such as a show-cause notice HR wants to review before sharing. It can be overridden per document at generation time.",
+    example: "On, a confirmation letter appears in the employee's portal the moment it is generated and they are notified. Off, a warning letter sits in their file unseen until HR chooses to share it.",
+  },
+  "storeAs.requireAcknowledgement": {
+    why: "Asks the employee to confirm, with their typed name, that they have read the document. Recorded with the time and address, and chased by reminders every three days. Use it for policies and letters that later matter — warnings, handbook updates, policy changes.",
+    example: "On for a warning letter, HR later has 'read and acknowledged by Ravi Kumar on 14 Mar 2026 10:42' rather than 'we emailed it'. On for a bonafide certificate it is an unnecessary chore.",
+  },
+  tags: {
+    why: "Free-form labels for finding templates — 'sales', 'contract', 'hindi'. They do not change what renders; they only help a large template library stay navigable.",
+    example: "Tag the three intern templates 'intern' and the picker narrows to them in one word. With no tags, an organization with forty templates scrolls.",
+  },
   "numbering.enabled": {
     why: "Turns on the sequential reference that makes an issued document auditable, and is what puts {{document.number}} into the context for the header, footer or body to print. With it off that placeholder resolves to nothing and copies become indistinguishable from one another.",
     example: "On, three experience certificates issued the same morning carry distinct references. Off, all 3 are identical apart from the name and none can be cited in an outward register.",

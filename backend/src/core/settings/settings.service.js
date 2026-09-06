@@ -152,6 +152,30 @@ async function set(key, rawValue, { req, actorName } = {}) {
   const value = coerce(definition, rawValue);
   const previous = await get(key);
 
+  /**
+   * The one setting that can lock its own author out. A list that does not
+   * include the address this request came from is refused, and so is a
+   * list with an entry the matcher cannot read — a typo there would
+   * silently allow nobody.
+   */
+  if (key === "security.allowed_ip_ranges" && Array.isArray(value) && value.length) {
+    const ipRange = require("../security/ipRange");
+    const broken = ipRange.invalidEntries(value);
+    if (broken.length) {
+      throw AppError.validation(
+        [{ field: key, message: `Not a valid address or range: ${broken.join(", ")}` }],
+        `Not a valid address or range: ${broken.join(", ")}`
+      );
+    }
+    const address = req && req.ip;
+    if (address && !ipRange.isAllowed(address, value)) {
+      throw AppError.validation(
+        [{ field: key, message: `This list would lock you out: your current address ${ipRange.normalise(address)} is not in it. Add it, or a range that contains it.` }],
+        `This list would lock you out: your current address ${ipRange.normalise(address)} is not in it.`
+      );
+    }
+  }
+
   const isDefault = JSON.stringify(value) === JSON.stringify(definition.default);
 
   if (isDefault) {

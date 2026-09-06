@@ -7,6 +7,7 @@ const tenant = require("../core/tenancy/tenantContext");
 const { logger } = require("../config/logger");
 const { env } = require("../config/env");
 const dt = require("../shared/datetime");
+const settings = require("../core/settings/settings.service");
 
 /**
  * The scheduler.
@@ -113,6 +114,62 @@ function start() {
     })
   );
 
+  // Acknowledgement and upload-request reminders — once a day, at 09:30 local.
+  tasks.push(
+    cron.schedule("35 * * * *", () => {
+      fanOut("documents.reminders", () => ({}), { atLocalHour: 9 }).catch((err) =>
+        logger.error({ err }, "Document reminder fan-out failed")
+      );
+    })
+  );
+
+  // Scheduled sheets — every hour, each organization decides what is due in
+  // its own zone; the schedule remembers the hour it last fired.
+  tasks.push(
+    cron.schedule("3 * * * *", () => {
+      fanOut("sheets.run-schedules", () => ({}), { keyed: false }).catch((err) =>
+        logger.error({ err }, "Sheet schedule fan-out failed")
+      );
+    })
+  );
+
+  // Scheduled employee movements — just after each organization's midnight,
+  // so a promotion dated today is in force before anyone signs in.
+  tasks.push(
+    cron.schedule("50 * * * *", () => {
+      fanOut("employees.apply-changes", () => ({}), { atLocalHour: 0 }).catch((err) =>
+        logger.error({ err }, "Employee change fan-out failed")
+      );
+    })
+  );
+
+  // Onboarding auto-completion and reminders — daily at 08:30 local.
+  tasks.push(
+    cron.schedule("28 * * * *", () => {
+      fanOut("onboarding.daily", () => ({}), { atLocalHour: 8 }).catch((err) =>
+        logger.error({ err }, "Onboarding fan-out failed")
+      );
+    })
+  );
+
+  // Surveys — auto-close and reminders, daily at 09:00 local.
+  tasks.push(
+    cron.schedule("18 * * * *", () => {
+      fanOut("surveys.daily", () => ({}), { atLocalHour: 9 }).catch((err) =>
+        logger.error({ err }, "Survey fan-out failed")
+      );
+    })
+  );
+
+  // Overdue asset returns — once a day, at 10:00 local.
+  tasks.push(
+    cron.schedule("45 * * * *", () => {
+      fanOut("assets.return-reminders", () => ({}), { atLocalHour: 10 }).catch((err) =>
+        logger.error({ err }, "Asset reminder fan-out failed")
+      );
+    })
+  );
+
   // Overdue approvals — escalation and auto-approval, hourly.
   tasks.push(
     cron.schedule("30 * * * *", () => {
@@ -163,6 +220,55 @@ function start() {
       fanOut("organization.recalculate-usage", () => ({}), { atLocalHour: 3 }).catch((err) =>
         logger.error({ err }, "Usage recalculation fan-out failed")
       );
+    })
+  );
+
+  // Push receipts — twice an hour. Global: device tokens belong to users, not
+  // tenants, so this is one job rather than one per organization.
+  tasks.push(
+    cron.schedule("7,37 * * * *", () => {
+      queue
+        .enqueue("push.check-receipts", {}, {
+          organizationId: null,
+          idempotencyKey: `push.check-receipts:${new Date().toISOString().slice(0, 16)}`,
+        })
+        .catch((err) => logger.error({ err }, "Push receipt check could not be enqueued"));
+    })
+  );
+
+  // Scheduled announcements — every five minutes, so "send at 9:00" lands
+  // within five minutes of nine rather than at the top of the next hour.
+  tasks.push(
+    cron.schedule("*/5 * * * *", () => {
+      fanOut("announcements.send-due", () => ({}), { keyed: false }).catch((err) =>
+        logger.error({ err }, "Announcement fan-out failed")
+      );
+    })
+  );
+
+  // Calendar-driven notifications — joiners, birthdays, probation reviews,
+  // tomorrow's leave and holidays — at 08:00 local.
+  tasks.push(
+    cron.schedule("5 * * * *", () => {
+      fanOut("notification.daily-events", (organization, localDate) => ({ date: localDate }), {
+        atLocalHour: 8,
+      }).catch((err) => logger.error({ err }, "Daily events fan-out failed"));
+    })
+  );
+
+  // The morning digest — at whatever hour each organization chose.
+  tasks.push(
+    cron.schedule("12 * * * *", () => {
+      fanOut("notification.daily-digest", (organization, localDate) => ({ date: localDate }), {
+        async onlyWhen(organization) {
+          return tenant.runWithTenant(organization._id, async () => {
+            const enabled = await settings.get("notification.daily_digest_enabled");
+            if (!enabled) return false;
+            const time = String(await settings.get("notification.daily_digest_time") || "09:00");
+            return Number(time.slice(0, 2)) === dt.nowIn(organization.timezone).hour();
+          });
+        },
+      }).catch((err) => logger.error({ err }, "Digest fan-out failed"));
     })
   );
 

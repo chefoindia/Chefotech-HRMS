@@ -44,6 +44,24 @@ function register(name, handler) {
   handlers.set(name, handler);
 }
 
+/**
+ * Handlers are registered by the server entrypoint. An inline drain — the
+ * path used when the worker is off, which is every test and many single-
+ * process dev runs — can happen before that, or in a process that never
+ * starts a server at all. Registering lazily here means "run this job now"
+ * always finds its handler, and the claim query never silently skips work.
+ */
+function ensureRegistered() {
+  if (handlers.size > 0) return;
+  try {
+    require("../../jobs")();
+  } catch (err) {
+    // A partial registration leaves whatever did register in place; the next
+    // drain reports the missing handler for the job it claims.
+    if (!/already registered/.test(String(err && err.message))) throw err;
+  }
+}
+
 function registeredJobs() {
   return [...handlers.keys()];
 }
@@ -222,6 +240,7 @@ async function stop() {
 
 /** Run one job inline. Used by tests and by "run now" admin actions. */
 async function drainOnce() {
+  ensureRegistered();
   const job = await claimNext();
   if (!job) return null;
   await runJob(job);

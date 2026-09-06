@@ -35,6 +35,13 @@ const roleSchema = createTenantSchema({
   rank: { type: Number, default: 50 },
 
   memberCount: { type: Number, default: 0 },
+
+  /**
+   * The permission catalog version this role was last reconciled against.
+   * See core/rbac/permissions.js — this is what lets a permission added in
+   * a later release reach the system roles of organizations created earlier.
+   */
+  permissionsVersion: { type: Number, default: 1 },
 });
 
 tenantUnique(roleSchema, "key");

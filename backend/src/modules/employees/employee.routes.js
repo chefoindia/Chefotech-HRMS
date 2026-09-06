@@ -96,6 +96,40 @@ router.get(
   asyncHandler(async (_req, res) => ok(res, await service.headcountStats()))
 );
 
+// ── Directory, duplicates, bulk actions, probation ─────────────────────────
+// Declared before /:id so their paths are never read as an employee id.
+
+const directory = require("./directory.service");
+const changes = require("./change.service");
+
+router.get(
+  "/directory",
+  requireAnyPermission("directory.view", "employee.view"),
+  validate({ query: z.object({ page: z.coerce.number().int().min(1).optional(), limit: z.coerce.number().int().min(1).max(500).optional(), q: z.string().max(80).optional(), departmentId: z.string().optional(), locationId: z.string().optional(), designationId: z.string().optional() }).passthrough() }),
+  asyncHandler(async (req, res) => {
+    const result = await directory.directory(req.query);
+    return paged(res, result.items, result);
+  })
+);
+
+router.get("/duplicates", requirePermission("employee.view"), asyncHandler(async (_req, res) => ok(res, await directory.duplicates())));
+
+router.post(
+  "/bulk",
+  requirePermission("employee.update"),
+  validate({
+    body: z.object({
+      employeeIds: z.array(z.string()).min(1).max(500),
+      action: z.enum(["set_department", "set_location", "set_manager", "set_shift", "set_employment_type", "add_tag", "remove_tag", "change_status"]),
+      value: z.string().max(100).nullable().optional(),
+      reason: z.string().max(300).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => ok(res, await directory.bulk(req.body, req, req.auth)))
+);
+
+router.get("/probation-due", requirePermission("employee.view"), asyncHandler(async (req, res) => ok(res, await changes.probationDue(Number(req.query.days) || 30))));
+
 // ── Self service ────────────────────────────────────────────────────────────
 
 router.get(
@@ -195,6 +229,47 @@ router.post(
     return ok(res, await service.presentFor(employee, req.auth));
   })
 );
+
+// ── Movements: promotions, transfers, confirmations ─────────────────────────
+
+router.get("/:id/changes", requirePermission("employee.view"), validate({ params: objectIdParam() }), asyncHandler(async (req, res) => ok(res, await changes.history(req.params.id))));
+
+router.post(
+  "/:id/changes",
+  requirePermission("employee.update"),
+  validate({
+    params: objectIdParam(),
+    body: z.object({
+      type: z.enum(["promotion", "transfer", "designation", "department", "manager", "location", "employment_type", "shift", "confirmation", "probation_extension", "work_mode"]),
+      effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      changes: z
+        .object({
+          designationId: z.string().nullable().optional(),
+          departmentId: z.string().nullable().optional(),
+          managerId: z.string().nullable().optional(),
+          locationId: z.string().nullable().optional(),
+          shiftId: z.string().nullable().optional(),
+          employmentType: z.string().optional(),
+          workMode: z.string().optional(),
+          probationMonths: z.number().int().min(0).max(24).optional(),
+          noticePeriodDays: z.number().int().min(0).max(365).optional(),
+        })
+        .optional(),
+      reason: z.string().max(1000).optional(),
+      generateLetter: z.boolean().optional(),
+      letterTemplateCode: z.string().max(40).optional(),
+      salaryRevision: z.object({ structureId: z.string(), ctcAnnual: z.number().positive(), componentAmounts: z.record(z.number()).optional() }).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    if (req.body.salaryRevision && !req.auth.permissions.includes("payroll.assign_salary")) {
+      throw AppError.forbidden("Recording a salary revision needs the assign-salary permission.");
+    }
+    return created(res, await changes.record(req.params.id, req.body, req));
+  })
+);
+
+router.post("/:id/changes/:changeId/cancel", requirePermission("employee.update"), validate({ params: z.object({ id: objectIdParam().shape.id, changeId: objectIdParam().shape.id }) }), asyncHandler(async (req, res) => ok(res, await changes.cancel(req.params.changeId, req))));
 
 router.post(
   "/:id/invite",

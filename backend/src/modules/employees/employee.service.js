@@ -14,6 +14,8 @@ const organizationService = require("../organizations/organization.service");
 const settings = require("../../core/settings/settings.service");
 const storage = require("../../core/storage/storage.service");
 const notifications = require("../notifications/notification.service");
+const recipients = require("../notifications/recipients");
+const dt = require("../../shared/datetime");
 const { assertLimit } = require("../organizations/planGuard");
 const { AppError } = require("../../core/errors/AppError");
 const { parseListQuery, searchFilter } = require("../../core/http/queryOptions");
@@ -337,6 +339,13 @@ async function create(data, req) {
   await bumpCounts(employee, 1);
   await organizationService.markStepCompleteIfPending("employees");
 
+  // A new joiner gets their onboarding checklist the moment the record
+  // exists, if the organization has switched that on. Failure here must
+  // never fail the creation itself.
+  require("../onboarding/onboarding.service")
+    .autoStart(employee, req)
+    .catch(() => {});
+
   await audit.record(
     {
       action: "employee.created",
@@ -355,7 +364,38 @@ async function create(data, req) {
     );
   }
 
+  // A record created ON the joining day is a joiner the 08:00 job has
+  // already missed. Backdated records are deliberately not announced — an
+  // import of three hundred existing staff is not three hundred joiners.
+  const joining = employee.employment && employee.employment.joiningDate;
+  if (joining && dt.toDateString(joining, organization.timezone) === dt.todayString(organization.timezone)) {
+    announceJoiner(employee, organization).catch((err) =>
+      logger.warn({ err, employeeId: String(employee._id) }, "Joiner notification failed")
+    );
+  }
+
   return employee;
+}
+
+async function announceJoiner(employee, organization) {
+  const [department, designation] = await Promise.all([
+    employee.employment.departmentId ? Department.findById(employee.employment.departmentId).select("name").lean() : null,
+    employee.employment.designationId ? Designation.findById(employee.employment.designationId).select("name").lean() : null,
+  ]);
+  await notifications.notify({
+    template: "employee_joined",
+    recipients: await recipients.usersWithPermission("employee.create"),
+    organization,
+    data: {
+      employee: {
+        id: String(employee._id),
+        name: employee.fullName,
+        department: (department && department.name) || "—",
+        designation: (designation && designation.name) || "—",
+      },
+    },
+    entity: { type: "Employee", id: employee._id },
+  });
 }
 
 async function update(employeeId, data, req, auth) {
@@ -425,6 +465,29 @@ async function update(employeeId, data, req, auth) {
     },
     req
   );
+
+  // The account salary is paid into changing is the one edit an employee
+  // must always hear about, whoever made it — it is the classic payroll fraud.
+  const bankBefore = (before.bank && before.bank.accountNumber) || "";
+  const bankAfter = (employee.bank && employee.bank.accountNumber) || "";
+  const ifscBefore = (before.bank && before.bank.ifscCode) || "";
+  const ifscAfter = (employee.bank && employee.bank.ifscCode) || "";
+  if ((bankBefore !== bankAfter || ifscBefore !== ifscAfter) && bankAfter) {
+    notifications
+      .notify({
+        template: "bank_details_changed",
+        recipients: [recipients.employeeToRecipient(employee)],
+        data: {
+          employee: { firstName: employee.personal.firstName },
+          actor: { name: (req && req.auth && req.auth.name) || "an administrator" },
+          when: new Date().toLocaleString("en-GB"),
+          bank: { last4: bankAfter.slice(-4), bankName: employee.bank.bankName || "" },
+        },
+        severity: "warning",
+        entity: { type: "Employee", id: employee._id },
+      })
+      .catch((err) => logger.warn({ err }, "Bank-change notification failed"));
+  }
 
   return presentFor(employee, auth || { permissions: ["employee.view_sensitive"] });
 }
@@ -549,7 +612,49 @@ async function changeStatus(employeeId, { status, effectiveFrom, reason, exit },
     req
   );
 
+  // Starting an exit — notice period, resignation, termination — is news to
+  // the manager, to HR, and to whoever runs clearance. Rules add IT and
+  // finance; the code names the two people who are always affected.
+  if (["notice_period", "resigned", "terminated"].includes(status) && !["resigned", "terminated"].includes(previous)) {
+    notifyExitInitiated(employee, status, req).catch((err) =>
+      logger.warn({ err, employeeId: String(employee._id) }, "Exit notification failed")
+    );
+  }
+
   return employee;
+}
+
+async function notifyExitInitiated(employee, status, req) {
+  const [department, designation, manager, hr, organization] = await Promise.all([
+    employee.employment.departmentId ? Department.findById(employee.employment.departmentId).select("name").lean() : null,
+    employee.employment.designationId ? Designation.findById(employee.employment.designationId).select("name").lean() : null,
+    recipients.managerOf(employee),
+    recipients.usersWithPermission("employee.update"),
+    recipients.organization(),
+  ]);
+  const exit = employee.exit || {};
+  await notifications.notify({
+    template: "exit_initiated",
+    recipients: [...hr, ...(manager ? [manager] : [])],
+    organization,
+    data: {
+      employee: {
+        id: String(employee._id),
+        name: employee.fullName,
+        department: (department && department.name) || "—",
+        designation: (designation && designation.name) || "—",
+      },
+      exit: {
+        type: (exit.exitType || status).replace(/_/g, " "),
+        lastWorkingDay: exit.lastWorkingDay
+          ? dt.toDateString(exit.lastWorkingDay, organization.timezone)
+          : "to be confirmed",
+      },
+      actor: { name: (req && req.auth && req.auth.name) || null },
+    },
+    severity: "warning",
+    entity: { type: "Employee", id: employee._id },
+  });
 }
 
 /** Create the login for an employee and email them an invitation. */

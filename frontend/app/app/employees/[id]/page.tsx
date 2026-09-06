@@ -22,6 +22,9 @@ import { api, ApiError } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { formatDate, formatDays, formatRelative, humanise } from "@/lib/format";
 import { refLabel } from "@/lib/utils";
+import { EmployeeDocumentsPanel } from "@/components/documents/EmployeeDocumentsPanel";
+import { EmployeeChangesPanel } from "@/components/modules/EmployeeChangesPanel";
+import { EmployeeAssetsTab } from "@/components/modules/EmployeeAssetsTab";
 import {
   Avatar,
   Button,
@@ -51,6 +54,8 @@ const TABS = [
   { key: "attendance", label: "Attendance" },
   { key: "leave", label: "Leave" },
   { key: "documents", label: "Documents" },
+  { key: "movements", label: "Movements" },
+  { key: "assets", label: "Assets" },
   { key: "activity", label: "Activity" },
 ];
 
@@ -239,6 +244,8 @@ export default function EmployeeProfilePage() {
       {tab === "attendance" && <AttendanceTab employeeId={employeeId} />}
       {tab === "leave" && <LeaveTab employeeId={employeeId} />}
       {tab === "documents" && <DocumentsTab employeeId={employeeId} locale={locale} />}
+      {tab === "movements" && <EmployeeChangesPanel employeeId={employeeId} locale={locale} />}
+      {tab === "assets" && <EmployeeAssetsTab employeeId={employeeId} locale={locale} />}
       {tab === "activity" && <ActivityTab employeeId={employeeId} />}
 
       <StatusDialog
@@ -599,59 +606,7 @@ function LeaveTab({ employeeId }: { employeeId: string }) {
 }
 
 function DocumentsTab({ employeeId, locale }: { employeeId: string; locale: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["employee", employeeId, "documents"],
-    queryFn: async () => {
-      const { data: documents } = await api.get<
-        Array<{
-          id: string;
-          name: string;
-          category: string;
-          status: string;
-          expiresOn: string | null;
-          isExpired: boolean;
-          createdAt: string;
-          file: { downloadUrl: string } | null;
-        }>
-      >(`/documents/employee/${employeeId}`);
-      return documents;
-    },
-  });
-
-  if (isLoading) return <div className="skeleton h-40" />;
-
-  return (
-    <Card>
-      <CardHeader title="Documents" />
-
-      {!data?.length ? (
-        <EmptyState
-          icon={<FileText className="h-5 w-5" />}
-          title="No documents"
-          description="Uploaded and generated documents appear here."
-        />
-      ) : (
-        <ul className="mt-4 divide-y">
-          {data.map((document) => (
-            <li key={document.id} className="flex items-center gap-3 py-3">
-              <FileText className="h-4.5 w-4.5 shrink-0 text-[var(--text-subtle)]" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-medium text-[var(--text)]">
-                  {document.name}
-                </p>
-                <p className="text-[12px] text-[var(--text-muted)]">
-                  {humanise(document.category)} · added {formatRelative(document.createdAt)}
-                  {document.expiresOn &&
-                    ` · ${document.isExpired ? "expired" : "expires"} ${formatDate(document.expiresOn, { locale })}`}
-                </p>
-              </div>
-              <StatusBadge status={document.isExpired ? "expired" : document.status} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
+  return <EmployeeDocumentsPanel employeeId={employeeId} locale={locale} />;
 }
 
 function ActivityTab({ employeeId }: { employeeId: string }) {

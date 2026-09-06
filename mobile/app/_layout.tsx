@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as Notifications from "expo-notifications";
+import { configureForegroundHandling } from "../src/notifications/push";
+import { routeForActionUrl } from "../src/notifications/deepLink";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
@@ -15,6 +18,28 @@ import { ApiError } from "../src/api/client";
 import { useBrandFonts } from "../src/theme/fonts";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
+configureForegroundHandling();
+
+/**
+ * A tapped notification opens the screen it is about — the leave tab for a
+ * leave decision, payslips for a payslip. Covers both the app being in the
+ * background and the app having been closed (the "last response" check).
+ */
+function useNotificationTaps() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const open = (response: Notifications.NotificationResponse | null) => {
+      const data = response?.notification.request.content.data as { actionUrl?: string } | undefined;
+      if (!data) return;
+      router.push(routeForActionUrl(data.actionUrl));
+    };
+
+    Notifications.getLastNotificationResponseAsync().then(open).catch(() => undefined);
+    const subscription = Notifications.addNotificationResponseReceivedListener(open);
+    return () => subscription.remove();
+  }, [router]);
+}
 
 /**
  * Root layout: providers, theme, and the lock screen.
@@ -62,6 +87,7 @@ function useAppStateFocus() {
 function RootNavigator() {
   const { isDark, colors } = useTheme();
   useAppStateFocus();
+  useNotificationTaps();
 
   return (
     <>

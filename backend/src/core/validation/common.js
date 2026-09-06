@@ -68,6 +68,39 @@ const boolish = () =>
     .union([z.boolean(), z.enum(["true", "false", "1", "0"]), z.number()])
     .transform((v) => v === true || v === "true" || v === 1 || v === "1");
 
+/**
+ * Form-friendly optionals.
+ *
+ * A browser form has no way to send "nothing" for a date or a select other
+ * than an empty string, and `dateString().nullable().optional()` rejects ""
+ * outright — so clearing a date of birth, or choosing "Not assigned" in a
+ * department picker, failed the whole save with "Use the format YYYY-MM-DD"
+ * on a field the person was trying to leave blank. These treat "" as null.
+ */
+const blankToNull = (value) => (value === "" ? null : value);
+
+const nullableDateString = () => z.preprocess(blankToNull, dateString().nullable().optional());
+
+const nullableObjectId = () => z.preprocess(blankToNull, objectId().nullable().optional());
+
+/**
+ * Numbers arrive from <input type="number"> as strings. Coerce, and treat
+ * "" as null rather than as NaN or 0.
+ */
+const optionalNumber = (min, max) => {
+  let schema = z.coerce.number();
+  if (min !== undefined) schema = schema.min(min);
+  if (max !== undefined) schema = schema.max(max);
+  return z.preprocess(blankToNull, schema.nullable().optional());
+};
+
+const optionalInt = (min, max) => {
+  let schema = z.coerce.number().int();
+  if (min !== undefined) schema = schema.min(min);
+  if (max !== undefined) schema = schema.max(max);
+  return z.preprocess(blankToNull, schema.nullable().optional());
+};
+
 module.exports = {
   objectId,
   objectIdParam,
@@ -80,4 +113,9 @@ module.exports = {
   hexColor,
   listQuery,
   boolish,
+  nullableDateString,
+  nullableObjectId,
+  optionalNumber,
+  optionalInt,
+  blankToNull,
 };

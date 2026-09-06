@@ -294,7 +294,11 @@ const payrollItemSchema = createTenantSchema({
         componentId: { type: mongoose.Schema.Types.ObjectId, ref: "SalaryComponent" },
         code: String,
         name: String,
-        type: String,
+        // A field literally named "type" must use the object form: a bare
+        // `type: String` here is read by Mongoose as the array's element
+        // type, which silently turned `lines` into [String] and made every
+        // payroll run fail to save its items with a cast error.
+        type: { type: String },
         category: String,
         /** Before attendance proration. */
         fullAmount: Number,

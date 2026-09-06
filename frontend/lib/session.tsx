@@ -35,14 +35,18 @@ interface SessionContextValue {
   hasFeature: (feature: string) => boolean;
   refresh: () => Promise<void>;
   signIn: (email: string, password: string, organizationId?: string) => Promise<SignInResult>;
+  /** Second step of sign-in when the account has two-factor on. */
+  completeMfa: (mfaToken: string, code: string, organizationId?: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   switchOrganization: (organizationId: string) => Promise<void>;
 }
 
 export interface SignInResult {
-  mode: "session" | "select_organization" | "platform";
+  mode: "session" | "select_organization" | "platform" | "mfa_required";
   redirectTo?: string;
   organizations?: Array<{ id: string; name: string; slug: string }>;
+  /** Present when mode is "mfa_required": proves the password step, expires in minutes. */
+  mfaToken?: string;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -103,13 +107,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const signIn = useCallback(
-    async (email: string, password: string, organizationId?: string): Promise<SignInResult> => {
-      const { data } = await api.post<any>(
-        "/auth/login",
-        { email, password, organizationId },
-        { raw: true }
-      );
+  const adopt = useCallback(
+    async (data: any): Promise<SignInResult> => {
+      if (data.mode === "mfa_required") {
+        return { mode: "mfa_required", mfaToken: data.mfaToken };
+      }
 
       tokens.set(data.accessToken, data.refreshToken);
 
@@ -129,12 +131,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         roles: data.roles,
         employeeId: data.employeeId,
         isPlatformUser: false,
+        passwordExpired: Boolean(data.passwordExpired),
+        mfaSetupRequired: Boolean(data.mfaSetupRequired),
+        mfaEnabled: Boolean(data.mfaEnabled),
       });
       applyBranding(data.organization?.branding);
 
       return { mode: "session", redirectTo: data.redirectTo || "/app" };
     },
     [load]
+  );
+
+  const signIn = useCallback(
+    async (email: string, password: string, organizationId?: string): Promise<SignInResult> => {
+      const { data } = await api.post<any>("/auth/login", { email, password, organizationId }, { raw: true });
+      return adopt(data);
+    },
+    [adopt]
+  );
+
+  const completeMfa = useCallback(
+    async (mfaToken: string, code: string, organizationId?: string): Promise<SignInResult> => {
+      const { data } = await api.post<any>("/auth/mfa/verify", { mfaToken, token: code, organizationId }, { raw: true });
+      return adopt(data);
+    },
+    [adopt]
   );
 
   const signOut = useCallback(async () => {
@@ -185,10 +206,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       hasFeature,
       refresh: load,
       signIn,
+      completeMfa,
       signOut,
       switchOrganization,
     }),
-    [session, loading, error, can, canAny, hasFeature, load, signIn, signOut, switchOrganization]
+    [session, loading, error, can, canAny, hasFeature, load, signIn, completeMfa, signOut, switchOrganization]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

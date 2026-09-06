@@ -102,6 +102,23 @@ router.get(
   })
 );
 
+/**
+ * Verify a printed document by the code on it.
+ *
+ * Answers "was this issued by us, and is this copy unaltered" and nothing
+ * more: the person it concerns is identified only by a masked employee code.
+ * Rate limited hard — this is a public endpoint keyed by a short code.
+ */
+router.get(
+  "/verify/:code",
+  strictLimiter,
+  validate({ params: z.object({ code: z.string().min(6).max(20) }) }),
+  asyncHandler(async (req, res) => {
+    const documentService = require("../documents/document.service");
+    return ok(res, await documentService.verifyByCode(req.params.code));
+  })
+);
+
 function offsetLabel(timezone) {
   try {
     const now = new Date();

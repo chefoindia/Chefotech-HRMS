@@ -12,6 +12,7 @@ const { logger } = require("../../config/logger");
 const tenant = require("../../core/tenancy/tenantContext");
 const audit = require("../../core/audit/audit.service");
 const notifications = require("../notifications/notification.service");
+const security = require("./security.service");
 
 /**
  * Authentication.
@@ -43,6 +44,8 @@ async function register({ firstName, lastName, email, password, companyName, pho
       .catch(() => {});
     return { pending: true };
   }
+
+  await security.assertPasswordPolicy(password, null);
 
   const user = new User({
     email,
@@ -125,6 +128,16 @@ async function login({ email, password, organizationId }, req) {
       user.lockedUntil = new Date(Date.now() + env.security.loginLockoutMinutes * 60000);
       user.failedLoginAttempts = 0;
       await user.save();
+      // The owner of the account is told, because a lockout is either them
+      // fumbling a password or someone else trying theirs.
+      notifications
+        .sendTransactional({
+          to: user.email,
+          template: "account_locked",
+          organizationId: user.lastOrganizationId,
+          data: { firstName: user.firstName, minutes: env.security.loginLockoutMinutes, ip: (req && req.ip) || "unknown" },
+        })
+        .catch((err) => logger.warn({ err }, "Account-locked email failed"));
       await audit.record({
         organizationId: null,
         actorId: user._id,
@@ -143,9 +156,65 @@ async function login({ email, password, organizationId }, req) {
 
   user.failedLoginAttempts = 0;
   user.lockedUntil = null;
+  await user.save();
+
+  /**
+   * The password is right. If the account has a second factor, stop here:
+   * hand back a five-minute token that proves only this step, and let
+   * `completeMfa` finish the job. Nothing below — session, device email,
+   * last-login stamp — happens until the code is right too.
+   */
+  if (user.mfaEnabled) {
+    return {
+      mode: "mfa_required",
+      mfaToken: security.signMfaToken(user, { organizationId }),
+      user: { email: user.email, firstName: user.firstName },
+    };
+  }
+
+  return finishLogin(user, { organizationId }, req);
+}
+
+/** Second step of sign-in: the code from the authenticator, or a recovery code. */
+async function completeMfa({ mfaToken, token, organizationId }, req) {
+  const { user, organizationId: hinted } = await security.verifyChallenge({ mfaToken, token }, req);
+  const withTokens = await User.findById(user._id).select("+refreshTokens");
+  return finishLogin(withTokens, { organizationId: organizationId || hinted }, req);
+}
+
+/** Everything that happens once identity is fully established. */
+async function finishLogin(user, { organizationId }, req) {
+  /**
+   * A sign-in from a browser or app this account has never used before is
+   * worth an email. It is judged on the user agent of the sessions we have
+   * kept (the last ten), which is coarse — a Chrome update looks like a new
+   * device — but the cost of a false alarm is one email, and the cost of no
+   * alarm is a stolen password used quietly for a month.
+   */
+  const userAgent = (req && req.headers && req.headers["user-agent"]) || "";
+  const priorSessions = user.refreshTokens || [];
+  const isNewDevice =
+    priorSessions.length > 0 && !priorSessions.some((t) => (t.userAgent || "") === userAgent);
+
   user.lastLoginAt = new Date();
   user.lastLoginIp = req && req.ip;
   await user.save();
+
+  if (isNewDevice) {
+    notifications
+      .sendTransactional({
+        to: user.email,
+        template: "new_device_login",
+        organizationId: user.lastOrganizationId,
+        data: {
+          firstName: user.firstName,
+          device: describeDevice(userAgent),
+          ip: (req && req.ip) || "unknown",
+          when: new Date().toLocaleString("en-GB", { timeZone: user.timezone || "Asia/Kolkata" }),
+        },
+      })
+      .catch((err) => logger.warn({ err }, "New-device email failed"));
+  }
 
   // ── Chefotech staff ───────────────────────────────────────────────────
   if (user.isPlatformUser) {
@@ -253,6 +322,11 @@ async function issueSession(user, organization, membership, req) {
     throw new AppError("ORGANIZATION_SUSPENDED");
   }
 
+  // The organization's network rule applies at the door, not only on later
+  // requests, so a refused sign-in gets a clear message instead of a session
+  // that fails on its first fetch.
+  await security.assertIpAllowed(organization._id, req && req.ip);
+
   const accessToken = tokens.signAccessToken({
     userId: user._id,
     organizationId: organization._id,
@@ -291,6 +365,8 @@ async function issueSession(user, organization, membership, req) {
     organizationService.decorate(organization.toObject ? organization.toObject() : organization)
   );
 
+  const flags = await securityFlags(user, organization._id, access);
+
   return {
     mode: "session",
     accessToken,
@@ -300,7 +376,23 @@ async function issueSession(user, organization, membership, req) {
     permissions: access.permissions,
     roles: access.roles,
     employeeId: access.employeeId,
-    redirectTo: landingRouteFor(access),
+    ...flags,
+    redirectTo: flags.passwordExpired ? "/me/security?expired=1" : flags.mfaSetupRequired ? "/me/security?setup=1" : landingRouteFor(access),
+  };
+}
+
+/**
+ * The two things a signed-in person may be required to do before anything
+ * else: change an expired password, or enrol a second factor because the
+ * organization requires one for administrators. The shell reads these and
+ * routes them to the security screen.
+ */
+async function securityFlags(user, organizationId, access) {
+  const policy = await security.policyFor(organizationId);
+  return {
+    passwordExpired: await security.passwordExpired(user, organizationId),
+    mfaSetupRequired: Boolean(policy.enforceTwoFactor && !user.mfaEnabled && security.isAdministrative(access.permissions)),
+    mfaEnabled: Boolean(user.mfaEnabled),
   };
 }
 
@@ -396,6 +488,12 @@ async function refresh(plainToken, req) {
     throw new AppError("TOKEN_EXPIRED");
   }
 
+  // Idle timeout. Each refresh mints a new entry stamped now, so the age of
+  // the entry being presented is exactly how long the session sat unused.
+  if (!user.isPlatformUser) {
+    await security.assertNotIdle(entry, user.lastOrganizationId);
+  }
+
   entry.revokedAt = new Date();
   await user.save();
 
@@ -454,18 +552,20 @@ async function forgotPassword(email, req) {
   user.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
   await user.save();
 
-  await notifications
-    .sendTransactional({
+  const resetUrl = `${env.app.publicUrl}/reset-password?token=${token.plain}`;
+
+  let mail = null;
+  try {
+    mail = await notifications.sendTransactional({
       to: user.email,
       template: "password_reset",
       organizationId: user.lastOrganizationId,
-      data: {
-        firstName: user.firstName,
-        resetUrl: `${env.app.publicUrl}/reset-password?token=${token.plain}`,
-        expiresInMinutes: 60,
-      },
-    })
-    .catch((err) => logger.error({ err }, "Password reset email failed"));
+      data: { firstName: user.firstName, resetUrl, expiresInMinutes: 60 },
+    });
+  } catch (err) {
+    logger.error({ err }, "Password reset email failed");
+    mail = { failed: true, error: err.message };
+  }
 
   await audit.record({
     organizationId: user.lastOrganizationId || null,
@@ -474,9 +574,16 @@ async function forgotPassword(email, req) {
     entityType: "User",
     entityId: user._id,
     severity: "notice",
+    description: mail && mail.failed ? `Reset email FAILED: ${mail.error}` : undefined,
   }, req);
 
-  return { ok: true };
+  return {
+    ok: true,
+    mail,
+    // In development with mail off there is no inbox to check; hand the link
+    // back so the flow can still be exercised end to end.
+    devResetUrl: env.isDev && !env.mail.enabled ? resetUrl : undefined,
+  };
 }
 
 async function resetPassword(plainToken, newPassword, req) {
@@ -488,6 +595,7 @@ async function resetPassword(plainToken, newPassword, req) {
 
   if (!user) throw new AppError("INVALID_TOKEN");
 
+  await security.assertPasswordPolicy(newPassword, user.lastOrganizationId);
   await user.setPassword(newPassword);
   user.passwordResetTokenHash = null;
   user.passwordResetExpiresAt = null;
@@ -504,6 +612,7 @@ async function resetPassword(plainToken, newPassword, req) {
     description: "Password reset completed; all sessions were ended",
   }, req);
 
+  notifyPasswordChanged(user, req);
   return { ok: true };
 }
 
@@ -517,6 +626,7 @@ async function changePassword(userId, currentPassword, newPassword, req) {
     throw AppError.badRequest("Choose a password you have not used here before.");
   }
 
+  await security.assertPasswordPolicy(newPassword, user.lastOrganizationId);
   await user.setPassword(newPassword);
   await user.save();
 
@@ -528,7 +638,80 @@ async function changePassword(userId, currentPassword, newPassword, req) {
     severity: "warning",
   }, req);
 
+  notifyPasswordChanged(user, req);
   return { ok: true };
+}
+
+/** "Your password was changed" — the email that catches an account takeover. */
+function notifyPasswordChanged(user, req) {
+  notifications
+    .sendTransactional({
+      to: user.email,
+      template: "password_changed",
+      organizationId: user.lastOrganizationId,
+      data: {
+        firstName: user.firstName,
+        when: new Date().toLocaleString("en-GB", { timeZone: user.timezone || "Asia/Kolkata" }),
+        ip: (req && req.ip) || "unknown",
+      },
+    })
+    .catch((err) => logger.warn({ err }, "Password-changed email failed"));
+}
+
+/**
+ * Something readable from a user agent string, for the new-device email.
+ * Not a parser — three regexes that cover the browsers and the mobile app.
+ */
+function describeDevice(userAgent) {
+  const ua = String(userAgent || "");
+  if (!ua) return "Unknown device";
+  if (/ChefotechHRMS/i.test(ua)) return `Chefotech HRMS app (${/\((\w+)\)/.exec(ua)?.[1] || "mobile"})`;
+  const browser =
+    /Edg\//.test(ua) ? "Edge" :
+    /OPR\//.test(ua) ? "Opera" :
+    /Chrome\//.test(ua) ? "Chrome" :
+    /Firefox\//.test(ua) ? "Firefox" :
+    /Safari\//.test(ua) ? "Safari" : "Browser";
+  const os =
+    /Windows/.test(ua) ? "Windows" :
+    /Android/.test(ua) ? "Android" :
+    /iPhone|iPad/.test(ua) ? "iOS" :
+    /Mac OS/.test(ua) ? "macOS" :
+    /Linux/.test(ua) ? "Linux" : "unknown OS";
+  return `${browser} on ${os}`;
+}
+
+/** Re-send the address confirmation email for a signed-in, unverified user. */
+async function resendVerification(userId, req) {
+  const user = await User.findById(userId).select("+emailVerifyTokenHash +emailVerifyExpiresAt");
+  if (!user) throw new AppError("UNAUTHENTICATED");
+  if (user.emailVerifiedAt) return { ok: true, alreadyVerified: true };
+
+  const verify = User.generateToken();
+  user.emailVerifyTokenHash = verify.hash;
+  user.emailVerifyExpiresAt = new Date(Date.now() + 48 * 3600 * 1000);
+  await user.save();
+
+  await notifications.sendTransactional({
+    to: user.email,
+    template: "email_verification",
+    organizationId: user.lastOrganizationId,
+    data: {
+      firstName: user.firstName,
+      verifyUrl: `${env.app.publicUrl}/verify-email?token=${verify.plain}`,
+    },
+  });
+
+  await audit.record({
+    organizationId: user.lastOrganizationId || null,
+    actorId: user._id,
+    action: "auth.verification_resent",
+    entityType: "User",
+    entityId: user._id,
+    severity: "info",
+  }, req);
+
+  return { ok: true, sentTo: user.email };
 }
 
 async function verifyEmail(plainToken) {
@@ -557,6 +740,13 @@ async function acceptInvitation(plainToken, { password, firstName, lastName }, r
 
   if (!user) throw new AppError("INVALID_TOKEN");
 
+  const memberships = await listMemberships(user._id);
+  const invited = memberships.find((m) => m.membership.status === "invited") || memberships[0];
+  if (!invited) throw new AppError("FORBIDDEN", { message: "This invitation is no longer valid." });
+
+  // The inviting organization's password rules apply to the first password too.
+  await security.assertPasswordPolicy(password, invited.organization.id);
+
   if (firstName) user.firstName = firstName;
   if (lastName !== undefined) user.lastName = lastName;
   await user.setPassword(password);
@@ -565,10 +755,6 @@ async function acceptInvitation(plainToken, { password, firstName, lastName }, r
   user.invitationTokenHash = null;
   user.invitationExpiresAt = null;
   await user.save();
-
-  const memberships = await listMemberships(user._id);
-  const invited = memberships.find((m) => m.membership.status === "invited") || memberships[0];
-  if (!invited) throw new AppError("FORBIDDEN", { message: "This invitation is no longer valid." });
 
   await tenant.runWithTenant(invited.organization.id, () =>
     Membership.updateOne(
@@ -598,6 +784,7 @@ async function me(auth) {
 
   const organization = await organizationService.current();
   const organizations = (await listMemberships(auth.userId)).map((m) => m.organization);
+  const flags = await securityFlags(user, auth.organizationId, { permissions: auth.permissions });
 
   return {
     user: publicUser(user),
@@ -610,6 +797,7 @@ async function me(auth) {
     roles: auth.roles,
     isOwner: auth.isOwner,
     isManager: auth.isManager,
+    ...flags,
   };
 }
 
@@ -636,6 +824,8 @@ module.exports = {
   LANDING_ROUTES,
   register,
   login,
+  completeMfa,
+  describeDevice,
   switchOrganization,
   listMemberships,
   refresh,
@@ -644,8 +834,10 @@ module.exports = {
   resetPassword,
   changePassword,
   verifyEmail,
+  resendVerification,
   acceptInvitation,
   me,
   publicUser,
   landingRouteFor,
+  describeDevice,
 };

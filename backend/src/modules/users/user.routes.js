@@ -84,4 +84,28 @@ router.delete(
   asyncHandler(async (req, res) => ok(res, await service.removeMembership(req.params.id, req)))
 );
 
+// ── Account security, done to someone else ──────────────────────────────────
+
+/** End every session of a user: a lost laptop, a leaver, a suspected takeover. */
+router.post(
+  "/:id/revoke-sessions",
+  requirePermission("user.update"),
+  validate({ params: objectIdParam() }),
+  asyncHandler(async (req, res) => {
+    const security = require("../auth/security.service");
+    return ok(res, await security.revokeAllForUser(req.params.id, req));
+  })
+);
+
+/** Remove a user's second factor when they have lost both phone and codes. Ends their sessions too. */
+router.post(
+  "/:id/reset-mfa",
+  requirePermission("settings.manage_security"),
+  validate({ params: objectIdParam() }),
+  asyncHandler(async (req, res) => {
+    const security = require("../auth/security.service");
+    return ok(res, await security.resetMfaForUser(req.params.id, req));
+  })
+);
+
 module.exports = router;

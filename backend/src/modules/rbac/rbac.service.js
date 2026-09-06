@@ -3,7 +3,15 @@
 const Role = require("./role.model");
 const Membership = require("./membership.model");
 const { systemRoleDefinitions } = require("../../core/rbac/systemRoles");
-const { ALL_PERMISSIONS, expandPermissions, isValidPermission } = require("../../core/rbac/permissions");
+const {
+  ALL_PERMISSIONS,
+  PERMISSION_VERSION,
+  expandPermissions,
+  isValidPermission,
+  permissionsAddedAfter,
+} = require("../../core/rbac/permissions");
+const { SYSTEM_ROLES } = require("../../core/rbac/systemRoles");
+const { logger } = require("../../config/logger");
 const { AppError } = require("../../core/errors/AppError");
 const tenant = require("../../core/tenancy/tenantContext");
 const audit = require("../../core/audit/audit.service");
@@ -53,10 +61,66 @@ async function seedRoles(organizationId) {
       isSystem: true,
       isDefault: Boolean(d.isDefault),
       rank: d.rank,
+      permissionsVersion: PERMISSION_VERSION,
     }));
 
   if (toCreate.length) await Role.insertMany(toCreate);
   return Role.find({}).sort({ rank: 1 }).lean();
+}
+
+/**
+ * Grant newly registered permissions to the system roles that should have them.
+ *
+ * Runs at boot, across every organization. For each system role whose
+ * `permissionsVersion` is behind the catalog, it adds the permissions its
+ * template grants that arrived after that version — and nothing else. A
+ * permission the tenant deliberately removed from a role years ago is not
+ * put back, because only permissions newer than the role's own version are
+ * considered. Members of any role that changed are recomputed so the new
+ * capability is live on their next request.
+ */
+async function syncSystemRolePermissions() {
+  const templates = Object.fromEntries(SYSTEM_ROLES.map((r) => [r.key, r]));
+
+  return tenant.runAsSystem(async () => {
+    const stale = await Role.find({
+      isSystem: true,
+      $or: [{ permissionsVersion: { $lt: PERMISSION_VERSION } }, { permissionsVersion: { $exists: false } }],
+    })
+      .setOptions({ bypassTenant: true })
+      .select("_id key organizationId permissions permissionsVersion isOwner")
+      .lean();
+
+    let updated = 0;
+    for (const role of stale) {
+      const template = templates[role.key];
+      const since = role.permissionsVersion || 1;
+      const granted = template ? new Set(expandPermissions(template.permissions)) : new Set();
+      const additions = permissionsAddedAfter(since).filter(
+        (p) => granted.has(p) && !(role.permissions || []).includes(p)
+      );
+
+      await tenant.runWithTenant(role.organizationId, async () => {
+        await Role.updateOne(
+          { _id: role._id },
+          {
+            $set: { permissionsVersion: PERMISSION_VERSION },
+            ...(additions.length ? { $addToSet: { permissions: { $each: additions } } } : {}),
+          }
+        );
+        if (additions.length) {
+          await recomputeRoleMembers(role._id);
+          updated += 1;
+        }
+      });
+    }
+
+    permissionCache.clear();
+    if (stale.length) {
+      logger.info({ checked: stale.length, updated, version: PERMISSION_VERSION }, "Role permissions reconciled");
+    }
+    return { checked: stale.length, updated };
+  }, "rbac.sync-permissions");
 }
 
 async function listRoles() {
@@ -304,6 +368,7 @@ async function resolveAccess(organizationId, userId, { fresh = false } = {}) {
 
 module.exports = {
   seedRoles,
+  syncSystemRolePermissions,
   listRoles,
   getRole,
   createRole,

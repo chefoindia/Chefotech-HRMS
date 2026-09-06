@@ -517,6 +517,76 @@ const SETTINGS = define([
     },
   },
 
+  {
+    key: "notification.daily_digest_enabled",
+    group: "notification",
+    label: "Send a daily digest to managers and HR",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "One morning email per manager listing what is waiting on them and what is happening today — pending approvals, who is off, who was absent yesterday, joiners, birthdays and documents about to expire. It replaces the drip of separate messages with a single glance, and it is only sent when there is something in it.",
+      example: "On: a plant manager gets one 9 AM email saying 3 leave requests and 2 corrections are waiting and two people are on leave today. Off: they get nothing summarised and must open the app to find out.",
+    },
+  },
+  {
+    key: "notification.notify_on_absent",
+    group: "notification",
+    label: "Tell employees when a day is marked absent",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "The morning after a day with no punches and no approved leave, the employee is told the day was recorded as absent — while there is still time to raise a correction. Most pay disputes start with someone discovering an absence on their payslip three weeks later.",
+      example: "On: someone whose reader failed on Tuesday hears about it Wednesday morning and raises a correction the same day. Off: they find out when the loss-of-pay line appears on the payslip.",
+    },
+  },
+  {
+    key: "notification.holiday_reminder",
+    group: "notification",
+    label: "Remind everyone the day before a holiday",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "A short in-app and push reminder the day before a holiday on the calendar that applies to the person. Harmless when everyone already knows; useful for regional holidays that only some locations observe, and for new joiners.",
+      example: "On: everyone on the Kerala calendar gets a reminder the evening before Onam; the Delhi office, which does not observe it, hears nothing. Off: no reminders.",
+    },
+  },
+  {
+    key: "notification.birthday_wishes",
+    group: "notification",
+    label: "Wish employees a happy birthday",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "A greeting from the company on the employee's birthday, in the app and as a push notification. Separate from the HR-facing birthday list, which is always sent. Switch it off if your culture would find it impersonal.",
+      example: "On: at 8 AM on their birthday the employee sees a greeting from the company. Off: HR still sees who has a birthday today; the employee receives nothing automated.",
+    },
+  },
+  {
+    key: "notification.probation_reminder_days",
+    group: "notification",
+    label: "Probation review reminder (days before)",
+    type: "number",
+    default: 14,
+    validation: { min: 1, max: 60 },
+    help: {
+      why: "How many days before an employee's probation ends their manager and HR are reminded to confirm, extend or decide. A second reminder always goes on the day itself. Probation that quietly lapses with no decision is a legal grey area in most jurisdictions, and this is what prevents it.",
+      example: "Set to 14 with a 3-month probation: someone who joined 1 June is flagged on 18 August and again on 1 September. Set to 30 and the first reminder comes on 2 August instead.",
+    },
+  },
+  {
+    key: "notification.leave_balance_low_threshold",
+    group: "notification",
+    label: "Warn when a leave balance drops to (days)",
+    type: "number",
+    default: 2,
+    validation: { min: 0, max: 30 },
+    description: "0 switches the warning off.",
+    help: {
+      why: "On the first of each month, anyone whose balance of a leave type is at or below this many days is told. It stops the surprise of a rejected request in December from someone who did not realise they had used their year.",
+      example: "Set to 2: an employee with 1.5 casual leave days left gets a note on the 1st. Set to 0 and nobody is warned.",
+    },
+  },
+
   // ── Security ─────────────────────────────────────────────────────────────
   {
     key: "security.session_idle_minutes",
@@ -579,6 +649,165 @@ const SETTINGS = define([
     },
   },
 
+  // ── Help desk ────────────────────────────────────────────────────────────
+  {
+    key: "helpdesk.sla_hours",
+    group: "helpdesk",
+    label: "Response targets by priority (hours)",
+    type: "json",
+    default: { urgent: 4, high: 24, normal: 72, low: 168 },
+    description: "A ticket is marked overdue this many hours after it is raised.",
+    help: {
+      why: "How long the help desk has to deal with a ticket before it shows as overdue on the queue and in the agent dashboard, per priority. It sets the expectation on both sides: an employee sees when to expect an answer, and an agent sees which ticket is about to breach. Nothing is auto-closed or escalated by it; it only decides what turns red.",
+      example: "With urgent 4 and normal 72, a payroll ticket raised at 09:00 Monday as urgent is overdue by 13:00; the same ticket at normal priority has until Thursday 09:00. Set normal to 8 and every ticket raised after lunch is overdue by the next morning.",
+    },
+  },
+  {
+    key: "helpdesk.category_owners",
+    group: "helpdesk",
+    label: "Auto-assign by category (email per category)",
+    type: "json",
+    default: {},
+    description: "Map a category to an agent's email to assign new tickets in that category automatically.",
+    help: {
+      why: "Routes a new ticket straight to the person who handles that kind of problem instead of leaving it unassigned for whoever looks first. The address must belong to someone with the help desk agent permission, otherwise the ticket stays unassigned and every agent is told about it.",
+      example: "{\"it\": \"sysadmin@company.com\", \"payroll\": \"accounts@company.com\"}: a laptop problem lands with the sysadmin the moment it is raised and only they are notified. Leave it empty and all agents see every new ticket and one of them picks it up.",
+    },
+  },
+
+  // ── Expenses ─────────────────────────────────────────────────────────────
+  {
+    key: "expense.categories",
+    group: "expense",
+    label: "Expense categories",
+    type: "array",
+    default: ["travel", "food", "accommodation", "fuel", "phone", "office_supplies", "medical", "other"],
+    description: "The categories an employee can claim under.",
+    help: {
+      why: "The only categories a claim line may use. A claim with a line outside this list is refused at submission, so the list is also how you stop people claiming things the policy does not cover. Categories are what finance groups spending by in the expense sheet.",
+      example: "Remove 'medical' and an employee trying to claim a pharmacy bill is told the category is not allowed before the manager ever sees it. Add 'client_entertainment' and the monthly expense sheet gains a column for it.",
+    },
+  },
+  {
+    key: "expense.max_claim_amount",
+    group: "expense",
+    label: "Maximum amount per claim",
+    type: "number",
+    default: 0,
+    validation: { min: 0, max: 100000000 },
+    description: "0 means no limit.",
+    help: {
+      why: "The ceiling on a single claim's total. Above it the claim is refused at submission with a message, rather than reaching an approver who then has to reject it. It caps one claim, not one person's monthly total — an employee can still file two claims.",
+      example: "Set 25000 and a conference trip totalling 31,400 has to be split into two claims (travel 18,000 and hotel 13,400), each of which goes through approval on its own. Set 0 and there is no ceiling; a manager decides on the amount alone.",
+    },
+  },
+  {
+    key: "expense.receipt_required_above",
+    group: "expense",
+    label: "Receipt required above",
+    type: "number",
+    default: 0,
+    validation: { min: 0, max: 100000000 },
+    description: "Lines above this amount must carry a receipt. 0 means receipts are always optional.",
+    help: {
+      why: "Below this amount an employee can claim on their word — a 40-rupee auto fare has no receipt and never will. Above it the claim is refused at submission until a receipt is attached, which is cheaper than a manager bouncing it a day later. Auditors usually expect a threshold here.",
+      example: "Set 500: a 350 lunch goes through with no receipt; a 1,800 hotel bill cannot be submitted until the invoice image is attached. Set 0 and a 20,000 flight can be claimed with nothing to show for it.",
+    },
+  },
+  {
+    key: "expense.mileage_rate",
+    group: "expense",
+    label: "Mileage rate per kilometre",
+    type: "number",
+    default: 0,
+    validation: { min: 0, max: 1000 },
+    description: "When a line has a distance and no amount, the amount is distance × this rate.",
+    help: {
+      why: "Lets people claim their own vehicle by distance rather than by guessing a fuel figure: they enter the kilometres, the platform computes the amount at this rate. The rate is what you have agreed with staff or what tax rules allow for the vehicle type; it is applied at submission and the computed amount is what the manager sees.",
+      example: "Set 8: a 42 km site visit becomes a 336 claim automatically. Set 0 and the distance field does nothing — the employee has to type an amount.",
+    },
+  },
+
+  // ── Loans and advances ───────────────────────────────────────────────────
+  {
+    key: "loan.max_amount",
+    group: "loan",
+    label: "Maximum loan or advance amount",
+    type: "number",
+    default: 0,
+    validation: { min: 0, max: 100000000 },
+    description: "0 means no limit.",
+    help: {
+      why: "The largest single loan or salary advance the platform accepts, whether requested by an employee or recorded by HR. It stops an oversized request reaching an approver at all. Many organizations tie this to a multiple of monthly salary; the platform enforces the flat figure here, so set it to the largest you would ever grant.",
+      example: "Set 200000: a request for 250,000 is refused with the limit stated. Set 0 and the only check is the approver's judgement.",
+    },
+  },
+  {
+    key: "loan.max_instalments",
+    group: "loan",
+    label: "Maximum number of instalments",
+    type: "number",
+    default: 24,
+    validation: { min: 1, max: 120 },
+    help: {
+      why: "How long a loan may be spread over. Each instalment is one monthly deduction filed with payroll the day the loan is disbursed, so this is also how far into the future the platform will schedule recoveries. Long schedules mean more of the balance is still outstanding when someone resigns.",
+      example: "Set 24: a 120,000 loan can be recovered at 5,000 a month over two years. Set 6 and the same loan means 20,000 a month, which the request form will show before the employee submits.",
+    },
+  },
+  {
+    key: "loan.max_active_per_employee",
+    group: "loan",
+    label: "Open loans allowed per employee",
+    type: "number",
+    default: 1,
+    validation: { min: 1, max: 10 },
+    help: {
+      why: "How many loans or advances one person can have open — requested, approved or being recovered — at the same time. Most organizations allow one, so a new loan cannot be taken to service the last one. Closing or fully recovering a loan frees the slot.",
+      example: "Set 1: an employee with 4 instalments left on a laptop loan is told to wait when they ask for a festival advance. Set 2 and both can run, with two deductions on each payslip.",
+    },
+  },
+  {
+    key: "leave.encashment_basis",
+    group: "loan",
+    label: "Leave encashment is calculated on",
+    type: "enum",
+    options: [
+      { value: "gross", label: "Gross monthly salary" },
+      { value: "basic", label: "Basic pay only" },
+    ],
+    default: "gross",
+    description: "Per-day rate = the chosen monthly figure ÷ 30.",
+    help: {
+      why: "Which monthly figure is divided by 30 to price one day of encashed leave. Basic-only is the usual Indian convention and about half the cost of gross; gross is more generous and what some employment contracts promise. The choice is applied the moment an encashment request is approved and the amount is filed with payroll.",
+      example: "An employee on 60,000 gross with 30,000 basic encashing 5 days gets 10,000 on 'gross' (60,000 ÷ 30 × 5) and 5,000 on 'basic'.",
+    },
+  },
+
+  // ── Onboarding and exits ─────────────────────────────────────────────────
+  {
+    key: "onboarding.auto_start",
+    group: "lifecycle",
+    label: "Start the joining checklist automatically",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "Whether adding an employee also opens their onboarding checklist and assigns its tasks — laptop, email, documents, policies — to the people who own them. Off, HR starts checklists by hand for the joiners they choose, which suits organizations that add many records for contractors who never really 'join'.",
+      example: "On: the moment 'Priya Shah, joining 3 March' is saved, IT is told to prepare a laptop by 1 March and Priya's manager gets a day-one welcome task. Off: nothing happens until someone opens her record and clicks Start onboarding.",
+    },
+  },
+  {
+    key: "exit.clearance_tasks",
+    group: "lifecycle",
+    label: "Exit clearance checklist",
+    type: "json",
+    default: [],
+    description: "A list of { title, owner } where owner is hr, it, finance, admin, manager or employee. Empty uses the built-in list.",
+    help: {
+      why: "The tasks that must be ticked off before an exit can be completed, and which team owns each. Every accepted resignation copies this list and assigns each item to someone in the owning team, so nothing is forgotten between the notice and the last day. Leave it empty for the standard seven (handover, laptop, access, cards, advances, exit interview, letters).",
+      example: "[{\"title\": \"Return uniform and locker key\", \"owner\": \"admin\"}, {\"title\": \"Handover of client accounts\", \"owner\": \"manager\"}] replaces the standard list with these two for a retail chain. Add {\"title\": \"Cancel fuel card\", \"owner\": \"finance\"} and finance is told on every exit from then on.",
+    },
+  },
+
   // ── Help ─────────────────────────────────────────────────────────────────
   {
     key: "help.tours_enabled",
@@ -602,6 +831,43 @@ const SETTINGS = define([
       example: "On: typing 'how do I change office timings' opens the shift settings with the right field highlighted. Off: the help button is hidden and people fall back to asking you directly.",
     },
   },
+
+  // ── Engagement: surveys and performance ──────────────────────────────────
+  {
+    key: "survey.default_anonymous",
+    group: "engagement",
+    label: "New surveys are anonymous by default",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "Whether a new pulse survey starts with anonymity switched on. Anonymous surveys never record who answered — only that a person has — which is what makes people honest about their manager or their workload. Switch it off if most of your surveys are attributable by design, such as a facilities preference poll.",
+      example: "On: 'How supported do you feel by your manager?' collects 40 answers and nobody, including HR, can tell which is whose. Off: each answer shows the employee name in the results.",
+    },
+  },
+  {
+    key: "performance.rating_scale",
+    group: "engagement",
+    label: "Default rating scale for reviews",
+    type: "number",
+    default: 5,
+    min: 3,
+    max: 10,
+    help: {
+      why: "The top of the scale a new review cycle starts with. Five is the most common and easiest to calibrate across managers; ten gives more spread but invites '7 means fine' inflation. It can be changed per cycle before the cycle starts.",
+      example: "5: managers rate each section 1 to 5 and give an overall 1 to 5. 4: no middle option, so a rating is always a lean one way or the other.",
+    },
+  },
+  {
+    key: "performance.self_review_required",
+    group: "engagement",
+    label: "Reviews start with a self-review",
+    type: "boolean",
+    default: true,
+    help: {
+      why: "Whether a review cycle opens with employees writing their own view before the manager writes theirs. A self-review first makes the manager's conversation a comparison rather than a verdict. Off, cycles go straight to the manager stage — quicker, and right for very small teams that talk daily.",
+      example: "On: the cycle starts in 'self-review'; managers are told once their people have submitted, or when HR moves the cycle on. Off: managers are told the moment the cycle starts.",
+    },
+  },
 ]);
 
 const SETTINGS_BY_KEY = Object.fromEntries(SETTINGS.map((s) => [s.key, s]));
@@ -614,6 +880,11 @@ const SETTING_GROUPS = [
   { key: "payroll", label: "Payroll", permission: "settings.manage_policies" },
   { key: "notification", label: "Notifications", permission: "settings.manage" },
   { key: "security", label: "Security", permission: "settings.manage_security" },
+  { key: "helpdesk", label: "Help desk", permission: "settings.manage" },
+  { key: "expense", label: "Expenses", permission: "settings.manage_policies" },
+  { key: "loan", label: "Loans and encashment", permission: "settings.manage_policies" },
+  { key: "lifecycle", label: "Onboarding and exits", permission: "settings.manage" },
+  { key: "engagement", label: "Surveys and performance", permission: "settings.manage" },
   { key: "help", label: "Help", permission: "settings.manage" },
 ];
 
